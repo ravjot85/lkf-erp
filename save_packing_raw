@@ -1,0 +1,80 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+
+def get_next_raw_id():
+    docs = db.collection("PackingListRaw").stream()
+    max_no = 0
+
+    for doc in docs:
+        data = doc.to_dict()
+        raw_id = str(data.get("RawId", "")).strip()
+        if raw_id.isdigit():
+            max_no = max(max_no, int(raw_id))
+
+    return str(max_no + 1)
+
+
+def main():
+    print("=== Save PackingListRaw ===")
+
+    order_id = input("Enter OrderId: ").strip()
+    customer_name = input("Enter Customer name: ").strip()
+    item = input("Enter Item: ").strip()
+    date = input("Enter Date (YYYY-MM-DD): ").strip()
+
+    print("\nEnter Fabric Details line by line in this format:")
+    print("Red: 22,21.5,23")
+    print("Blue: 18,19.5")
+    print("Press Enter on blank line to finish.\n")
+
+    fabric_lines = []
+    while True:
+        line = input()
+        if not line.strip():
+            break
+        fabric_lines.append(line)
+
+    print("\nEnter Accessory Details line by line in this format:")
+    print("White: 4,5")
+    print("Black: 2.5,3")
+    print("Press Enter on blank line to finish.\n")
+
+    accessory_lines = []
+    while True:
+        line = input()
+        if not line.strip():
+            break
+        accessory_lines.append(line)
+
+    fabric_details = "\n".join(fabric_lines)
+    accessory_details = "\n".join(accessory_lines)
+
+    raw_id = get_next_raw_id()
+
+    data = {
+        "RawId": raw_id,
+        "Date": date,
+        "OrderId": order_id,
+        "Customer name": customer_name,
+        "Item": item,
+        "FabricDetails": fabric_details,
+        "AccessoryDetails": accessory_details
+    }
+
+    db.collection("PackingListRaw").document(raw_id).set(data)
+
+    print(f"\n✅ PackingListRaw saved successfully with RawId {raw_id}")
+
+
+if __name__ == "__main__":
+    main()

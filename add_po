@@ -1,0 +1,36 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# Your PO structure
+po_data = {
+    "Category": "",
+    "Customer name": "",
+    "Date": "",
+    "Item": "",
+    "OrderId": "1001",
+
+    "accessoryprice": 550,
+    "accessoryqnty": 90,
+    "coloursinstructions": "",
+    "customerpono": "",
+    "fabricprice": 500,
+    "facricqnty": 200,
+    "gsm": 100,
+    "image": ""
+}
+
+# IMPORTANT: use OrderId as document id
+doc_id = po_data["OrderId"]
+
+db.collection("po").document(doc_id).set(po_data)
+
+print(f"✅ PO {doc_id} added successfully")

@@ -1,0 +1,104 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+
+def get_next_inward_challan_no():
+    docs = db.collection("process_inward").stream()
+    max_no = 100
+
+    for doc in docs:
+        data = doc.to_dict()
+        challan = str(data.get("ChallanNo", "")).strip()
+        if challan.isdigit():
+            max_no = max(max_no, int(challan))
+
+    return str(max_no + 1)
+
+
+# -------- USER INPUT --------
+date = input("Enter Date (YYYY-MM-DD): ").strip()
+order_id = input("Enter base OrderId (e.g. 1001): ").strip()
+
+# -------- FETCH MATCHING LOTS FROM PROCESS_OUT --------
+docs = db.collection("process_out").where("OrderId", "==", order_id).stream()
+
+lot_rows = []
+print("\nAvailable LotNos:")
+
+for doc in docs:
+    row = doc.to_dict()
+    lot_rows.append(row)
+    print("-", row.get("LotNo", ""))
+
+if not lot_rows:
+    print("❌ No process_out lots found for this OrderId")
+    raise SystemExit
+
+# -------- USER SELECTS LOT --------
+lot_no = input("\nEnter LotNo from above list: ").strip()
+
+selected = None
+for row in lot_rows:
+    if row.get("LotNo", "").strip().upper() == lot_no.upper():
+        selected = row
+        break
+
+if not selected:
+    print("❌ Invalid LotNo selected")
+    raise SystemExit
+
+# -------- INWARD INPUTS --------
+received_roll = int(input("Enter Received Roll: ").strip())
+received_qty = float(input("Enter Received Quantity: ").strip())
+rate_input = input("Enter Rate (optional): ").strip()
+remarks = input("Enter Remarks (optional): ").strip()
+
+rate = float(rate_input) if rate_input else 0.0
+
+# -------- AUTO CALCULATIONS --------
+sent_roll = int(selected.get("Roll", 0))
+sent_qty = float(selected.get("Qnty", 0))
+short_qty = sent_qty - received_qty
+amount = received_qty * rate
+challan_no = get_next_inward_challan_no()
+
+# -------- SAVE --------
+doc_id = f"{challan_no}_{lot_no}"
+
+inward_data = {
+    "ChallanNo": challan_no,
+    "Date": date,
+    "PartyName": selected.get("PartyName", ""),
+    "ProcessName": "DYEING",
+
+    "LotNo": selected.get("LotNo", ""),
+    "OrderId": selected.get("OrderId", ""),
+    "Item": selected.get("Item", ""),
+    "Colour": selected.get("Colour", ""),
+    "Process": selected.get("Process", ""),
+    "GSM": selected.get("DiaGsm", ""),
+
+    "SentRoll": sent_roll,
+    "ReceivedRoll": received_roll,
+
+    "SentQty": sent_qty,
+    "ReceivedQty": received_qty,
+    "ShortQty": short_qty,
+
+    "Rate": rate,
+    "Amount": amount,
+    "Remarks": remarks
+}
+
+db.collection("process_inward").document(doc_id).set(inward_data)
+
+print(f"\n✅ Process Inward entry added successfully with Challan No {challan_no}")

@@ -1,0 +1,22 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# Fetch PO with ID 1001
+doc = db.collection("po").document("1001").get()
+
+if doc.exists:
+    data = doc.to_dict()
+    print("✅ PO Found:\n")
+    for key, value in data.items():
+        print(f"{key} : {value}")
+else:
+    print("❌ PO not found")

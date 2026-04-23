@@ -1,0 +1,44 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# ---- USER INPUT ----
+order_id = input("Enter OrderId: ").strip()
+date = input("Enter Shoot Date (YYYY-MM-DD): ").strip()
+
+# ---- FETCH PO ----
+po_doc = db.collection("po").document(order_id).get()
+
+if not po_doc.exists:
+    print("❌ PO not found")
+    exit()
+
+po_data = po_doc.to_dict()
+
+# ---- CREATE SHOOT ORDER ----
+shoot_data = {
+    "OrderId": order_id,
+    "Date": date,
+
+    # Auto fetched fields
+    "Category": po_data.get("Category", ""),
+    "Customer name": po_data.get("Customer name", ""),
+    "Item": po_data.get("Item", ""),
+    "gsm": po_data.get("gsm", ""),
+    "coloursinstructions": po_data.get("coloursinstructions", ""),
+    "facricqnty": po_data.get("facricqnty", ""),
+    "image": po_data.get("image", "")
+}
+
+# ---- SAVE ----
+db.collection("shoot_order").add(shoot_data)
+
+print("✅ Shoot Order created successfully")

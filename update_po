@@ -1,0 +1,49 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+order_id = input("Enter OrderId to update: ").strip()
+
+doc_ref = db.collection("po").document(order_id)
+doc = doc_ref.get()
+
+if not doc.exists:
+    print("❌ PO not found")
+else:
+    data = doc.to_dict()
+    print("\n✅ PO Found. Enter new values (press ENTER to keep old)\n")
+
+    update_data = {}
+
+    for key, value in data.items():
+
+        # Skip OrderId
+        if key == "OrderId":
+            continue
+
+        new_value = input(f"{key} ({value}): ").strip()
+
+        if new_value != "":
+            # Convert numbers properly
+            if isinstance(value, int):
+                try:
+                    new_value = int(new_value)
+                except:
+                    print(f"⚠️ Invalid number for {key}, skipped")
+                    continue
+
+            update_data[key] = new_value
+
+    if update_data:
+        doc_ref.update(update_data)
+        print("\n✅ PO updated successfully")
+    else:
+        print("\n⚠️ No changes made")

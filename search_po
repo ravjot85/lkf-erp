@@ -1,0 +1,23 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+order_id = input("Enter OrderId: ").strip()
+
+doc = db.collection("po").document(order_id).get()
+
+if doc.exists:
+    data = doc.to_dict()
+    print("\n✅ PO Found:\n")
+    for key, value in data.items():
+        print(f"{key}: {value}")
+else:
+    print("\n❌ PO not found")

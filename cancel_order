@@ -1,0 +1,40 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# -------- INPUT --------
+order_id = input("Enter OrderId to cancel: ").strip()
+date = input("Enter Date (YYYY-MM-DD): ").strip()
+reason = input("Enter Reason (optional): ").strip()
+
+# -------- CHECK PO --------
+po_doc = db.collection("po").document(order_id).get()
+
+if po_doc.exists:
+    status = "VALID"
+    print("✅ PO exists → Valid cancellation")
+else:
+    status = "INVALID"
+    print("❌ PO not found → Invalid cancellation")
+
+# -------- CREATE DOC --------
+doc_id = f"{order_id}_{date}"
+
+data = {
+    "OrderId": order_id,
+    "Date": date,
+    "Reason": reason,
+    "Status": status
+}
+
+db.collection("cancel_orders").document(doc_id).set(data)
+
+print("\n✅ Cancel order entry saved")

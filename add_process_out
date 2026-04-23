@@ -1,0 +1,102 @@
+import re
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+cred = credentials.Certificate("firebase-key.json")
+
+try:
+    firebase_admin.get_app()
+except ValueError:
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+
+def get_next_challan_no():
+    docs = db.collection("process_out").stream()
+    max_no = 100
+
+    for doc in docs:
+        data = doc.to_dict()
+        challan = str(data.get("ChallanNo", "")).strip()
+
+        if challan.isdigit():
+            max_no = max(max_no, int(challan))
+
+    return str(max_no + 1)
+
+
+def extract_order_id_from_lot(lot_no: str):
+    """
+    Examples:
+    1001A   -> 1001
+    1122-D  -> 1122
+    1652-E  -> 1652
+    1736-H  -> 1736
+    1001    -> 1001
+    """
+    lot_no = lot_no.strip().upper()
+    match = re.match(r"^(\d+)", lot_no)
+    return match.group(1) if match else None
+
+
+# -------- AUTO GENERATE CHALLAN NO --------
+challan_no = get_next_challan_no()
+print(f"Generated Challan No: {challan_no}")
+
+# -------- USER INPUT --------
+date = input("Enter Date (YYYY-MM-DD): ").strip()
+party = input("Enter Party Name: ").strip()
+vehicle = input("Enter Vehicle No: ").strip()
+
+lot_no = input("Enter Lot No (e.g. 1001A or 1122-D): ").strip()
+colour = input("Enter Colour: ").strip()
+roll = int(input("Enter Roll: ").strip())
+qty = float(input("Enter Quantity: ").strip())
+process = input("Enter Process: ").strip()
+diag = input("Enter Dia/GSM (optional): ").strip()
+
+# -------- DERIVE ORDER ID FROM LOT NO --------
+order_id = extract_order_id_from_lot(lot_no)
+
+if not order_id:
+    print("❌ Could not derive OrderId from LotNo")
+    raise SystemExit
+
+print(f"Derived OrderId: {order_id}")
+
+# -------- FETCH PO --------
+po_doc = db.collection("po").document(order_id).get()
+
+if not po_doc.exists:
+    print(f"❌ PO not found for OrderId {order_id}")
+    raise SystemExit
+
+po_data = po_doc.to_dict()
+
+# -------- UNIQUE DOCUMENT ID --------
+doc_id = f"{challan_no}_{lot_no}"
+
+data = {
+    "ChallanNo": challan_no,
+    "Date": date,
+    "PartyName": party,
+    "VehicleNo": vehicle,
+
+    "LotNo": lot_no,
+    "OrderId": order_id,
+
+    "Item": po_data.get("Item", ""),
+    "Customer name": po_data.get("Customer name", ""),
+
+    "Colour": colour,
+    "Roll": roll,
+    "Qnty": qty,
+    "Process": process,
+    "DiaGsm": diag
+}
+
+# -------- SAVE --------
+db.collection("process_out").document(doc_id).set(data)
+
+print(f"✅ Process Out entry added successfully with Challan No {challan_no}")
