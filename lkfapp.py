@@ -4408,8 +4408,13 @@ elif menu == "Import Data":
             also_masters = st.checkbox("Auto-add Customers & Items to master lists",
                                        value=True, key="imp_masters")
 
-        required  = set(cfg["required"])
-        missing   = required - set(new_mapping.keys())
+        # When updating existing records only, OrderId is the only required field.
+        # All other required fields are only needed when creating new records.
+        if conflict == "Update (overwrite)":
+            required = {"OrderId"}
+        else:
+            required = set(cfg["required"])
+        missing = required - set(new_mapping.keys())
         if missing:
             st.warning(f"Required columns not mapped: {', '.join(missing)}")
 
