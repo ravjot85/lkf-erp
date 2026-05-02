@@ -1490,12 +1490,54 @@ elif menu == "Process Out":
             topMargin=1.5*cm, bottomMargin=1.5*cm,
             leftMargin=1.5*cm, rightMargin=1.5*cm,
         )
-        styles = getSampleStyleSheet()
+        styles  = getSampleStyleSheet()
+        normal  = styles["Normal"]
         elements = []
-        _pdf_header(elements, styles, "PROCESS OUT CHALLAN")
+        small_s = ParagraphStyle("sm",  parent=normal, fontSize=9)
+        bold_s  = ParagraphStyle("b",   parent=normal, fontName="Helvetica-Bold", fontSize=10)
+        ctr_s   = ParagraphStyle("ctr", parent=normal, alignment=1)            # centre
+        co_name_s = ParagraphStyle("co", parent=normal, fontName="Helvetica-Bold",
+                                   fontSize=14, alignment=1)
+        co_addr_s = ParagraphStyle("ca", parent=normal, fontSize=10, alignment=1)
+        title_s   = ParagraphStyle("ti", parent=normal, fontName="Helvetica-Bold",
+                                   fontSize=12, alignment=1)
 
-        # Challan header table (with GST No, no customer)
-        small_s = ParagraphStyle("sm", parent=styles["Normal"], fontSize=9)
+        # ── Company letterhead ──────────────────────────────
+        lh_left  = Table(
+            [[Paragraph("GSTIN No :  03AAECL9162H1Z1", small_s)],
+             [Paragraph("PAN No    :  AAECL9162H",     small_s)]],
+            colWidths=[7*cm]
+        )
+        lh_right = Table(
+            [[Paragraph("Phone :  98766-82001", small_s)]],
+            colWidths=[7*cm]
+        )
+        lh_right.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT")]))
+
+        letterhead = Table(
+            [[lh_left, "", lh_right]],
+            colWidths=[7*cm, 4*cm, 7*cm],
+        )
+        letterhead.setStyle(TableStyle([
+            ("BOX",    (0, 0), (-1, -1), 0.8, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("PADDING",(0, 0), (-1, -1), 6),
+        ]))
+        elements.append(letterhead)
+        elements.append(Spacer(1, 0.15*cm))
+
+        # Company name + address centred
+        elements.append(Paragraph("LOVELY KNITFAB PVT LTD",   co_name_s))
+        elements.append(Paragraph("HB NO.85, VILL. KASABAD",  co_addr_s))
+        elements.append(Paragraph("LUDHIANA",                  co_addr_s))
+        elements.append(Spacer(1, 0.3*cm))
+
+        # Challan title (underlined style)
+        elements.append(Paragraph(
+            '<u><b>JOB WORK CHALLAN (OUTWARD)</b></u>', title_s))
+        elements.append(Spacer(1, 0.4*cm))
+
+        # ── Challan header table ────────────────────────────
         h_rows = [
             ["Challan No", str(header.get("ChallanNo", "")),  "Date",       str(header.get("Date", ""))],
             ["Party",      str(header.get("PartyName", "")),  "GST No",     str(header.get("GstNo", "—"))],
