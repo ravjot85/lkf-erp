@@ -2341,18 +2341,55 @@ elif menu == "Packing":
             pdf_name  = f"PackingList_{order_id_in.strip()}_{raw_id}.pdf"
 
             with st.spinner("Saving..."):
-                try:
-                    pdf_bytes = build_packing_pdf(data, f_lines, a_lines)
-                    pdf_res   = upload_to_drive(pdf_bytes, pdf_name, "application/pdf",
-                                                folder_id=PACKING_PDF_FOLDER)
-                    pdf_url   = pdf_res["url"]
-                    data["pdf_url"] = pdf_url
-                except Exception as e:
-                    st.warning(f"Drive error: {e}")
-                    if pdf_bytes is None:
-                        pdf_bytes = build_packing_pdf(data, f_lines, a_lines)
-
+                # Save new entry first
                 db.collection("PackingListRaw").document(raw_id).set(data)
+
+                # Fetch ALL entries for this OrderId (including the one just saved)
+                # and merge FabricDetails + AccessoryDetails by colour
+                all_slips = [
+                    d.to_dict() for d in
+                    db.collection("PackingListRaw")
+                    .where("OrderId", "==", order_id_in.strip())
+                    .stream()
+                ]
+
+                def _merge_lines(slips, field):
+                    colour_weights = {}
+                    for slip in slips:
+                        for line in slip.get(field, "").splitlines():
+                            if ":" not in line:
+                                continue
+                            colour, wstr = line.split(":", 1)
+                            colour = colour.strip().upper()
+                            weights = [w.strip() for w in wstr.split(",") if w.strip()]
+                            if colour not in colour_weights:
+                                colour_weights[colour] = []
+                            colour_weights[colour].extend(weights)
+                    return [f"{c}: {','.join(ws)}" for c, ws in colour_weights.items()]
+
+                merged_f = _merge_lines(all_slips, "FabricDetails")
+                merged_a = _merge_lines(all_slips, "AccessoryDetails")
+                slip_count = len(all_slips)
+
+                try:
+                    pdf_bytes = build_packing_pdf(data, merged_f, merged_a)
+                    pdf_name  = f"PackingList_{order_id_in.strip()}.pdf"
+                    pdf_res   = upload_to_firebase_storage(
+                        pdf_bytes,
+                        f"packing_pdfs/PackingList_{order_id_in.strip()}.pdf",
+                        "application/pdf",
+                    )
+                    pdf_url = pdf_res
+                    # Update all slips for this OrderId with the merged pdf_url
+                    for slip in all_slips:
+                        db.collection("PackingListRaw").document(slip["RawId"]).update({"pdf_url": pdf_url})
+                except Exception as e:
+                    st.warning(f"PDF error: {e}")
+                    if pdf_bytes is None:
+                        pdf_bytes = build_packing_pdf(data, merged_f, merged_a)
+
+                if slip_count > 1:
+                    st.info(f"ℹ️ PDF merged across {slip_count} packing slips for Order {order_id_in.strip()}")
 
             st.session_state.pack_result = {
                 "raw_id": raw_id, "pdf_bytes": pdf_bytes,
