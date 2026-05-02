@@ -547,6 +547,11 @@ def build_shoot_order_pdf(d: dict, image_bytes: bytes = None) -> bytes:
         elements.append(Paragraph(str(d["coloursinstructions"]), styles["Normal"]))
         elements.append(Spacer(1, 0.4*cm))
 
+    if d.get("accessory"):
+        elements.append(Paragraph("<b>Accessory Description:</b>", styles["Normal"]))
+        elements.append(Paragraph(str(d["accessory"]), styles["Normal"]))
+        elements.append(Spacer(1, 0.4*cm))
+
     if image_bytes:
         _embed_image(elements, image_bytes)
 
@@ -676,6 +681,7 @@ def _load_status_df():
             "pdf_url":        d.get("pdf_url", ""),
             "image_drive_id": d.get("image_drive_id", ""),
             "image_url":      d.get("image", ""),
+            "Accessory":      d.get("accessory", ""),
         })
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
@@ -861,6 +867,7 @@ if menu == "Dashboard":
                     <div><b>Accessory Qty:</b> {int(po_d.get('accessoryqnty') or 0):,}</div>
                     <div><b>Accessory Price:</b> ₹{int(po_d.get('accessoryprice') or 0)}</div>
                     <div style="grid-column:span 2"><b>Colours/Instructions:</b> {po_d.get('coloursinstructions','—')}</div>
+                    {f'<div style="grid-column:span 2"><b>Accessory Details:</b> {po_d.get("accessory","")}</div>' if po_d.get('accessory') else ''}
                 </div>
                 """, unsafe_allow_html=True)
                 if po_d.get("pdf_url"):
@@ -1341,6 +1348,7 @@ elif menu == "Shoot Order":
             "coloursinstructions": po_data.get("coloursinstructions", ""),
             "facricqnty":          po_data.get("facricqnty", ""),
             "accessoryqnty":       po_data.get("accessoryqnty", ""),
+            "accessory":           po_data.get("accessory", ""),
             "image":               po_data.get("image", ""),
             "image_drive_id":      po_data.get("image_drive_id", ""),
         }
