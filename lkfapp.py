@@ -533,10 +533,9 @@ def build_shoot_order_pdf(d: dict, image_bytes: bytes = None) -> bytes:
     _pdf_header(elements, styles, "SHOOT ORDER")
 
     rows = [
-        ["Order ID",       str(d.get("OrderId", "")),       "Date",          str(d.get("Date", ""))],
-        ["Customer",       str(d.get("Customer name", "")), "Item",          str(d.get("Item", ""))],
-        ["Category",       str(d.get("Category", "")),      "GSM",           str(d.get("gsm", ""))],
-        ["Fabric Qty",     str(d.get("facricqnty", "")),    "Accessory Qty", str(d.get("accessoryqnty", ""))],
+        ["Order ID",   str(d.get("OrderId", "")),       "Date",    str(d.get("Date", ""))],
+        ["Customer",   str(d.get("Customer name", "")), "Item",    str(d.get("Item", ""))],
+        ["Category",   str(d.get("Category", "")),      "GSM",     str(d.get("gsm", ""))],
     ]
     t = Table(rows, colWidths=_TABLE_COL_WIDTHS)
     t.setStyle(_base_table_style())
