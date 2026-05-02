@@ -2317,33 +2317,44 @@ elif menu == "Packing":
         st.markdown(f"**{section_label}**")
         st.caption("One colour row can have unlimited weights. Click ＋ to add more weight boxes.")
 
+        WROW = 4   # max weight inputs per row
         rows = st.session_state[rows_key]
         for row in list(rows):
-            rid = row["id"]
-            wc  = row["wc"]
+            rid      = row["id"]
+            wc       = row["wc"]
+            indices  = list(range(wc))
+            sub_rows = [indices[i:i+WROW] for i in range(0, max(len(indices),1), WROW)]
+            if not sub_rows:
+                sub_rows = [[]]
 
-            # Header label row
-            hd1, hd2, hd3 = st.columns([3, wc, 1])
-            hd1.markdown("<small>Colour</small>", unsafe_allow_html=True)
-            hd2.markdown("<small>Weights</small>", unsafe_allow_html=True)
+            for sr_idx, sr in enumerate(sub_rows):
+                n = len(sr)
+                if sr_idx == 0:
+                    # First sub-row: Colour | weights | Delete
+                    cols = st.columns([2.5] + [1]*n + [0.5])
+                    with cols[0]:
+                        st.text_input("Colour", placeholder="e.g. RED",
+                                      key=f"{prefix}_colour_{rid}", label_visibility="collapsed")
+                    for k, j in enumerate(sr):
+                        with cols[k+1]:
+                            st.text_input(f"w{j}", placeholder="Wt",
+                                          key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
+                    with cols[-1]:
+                        if st.button("🗑", key=f"{prefix}_rm_{rid}", help="Remove colour row"):
+                            st.session_state[rows_key] = [r for r in rows if r["id"] != rid]
+                            st.rerun()
+                else:
+                    # Continuation sub-rows: blank | weights | blank
+                    cols = st.columns([2.5] + [1]*n + [0.5])
+                    for k, j in enumerate(sr):
+                        with cols[k+1]:
+                            st.text_input(f"w{j}", placeholder="Wt",
+                                          key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
 
-            # Input row
-            in_cols = st.columns([3] + [1] * wc + [1, 1])
-            with in_cols[0]:
-                st.text_input("Colour", placeholder="e.g. RED",
-                              key=f"{prefix}_colour_{rid}", label_visibility="collapsed")
-            for j in range(wc):
-                with in_cols[j + 1]:
-                    st.text_input(f"w{j}", placeholder="Wt",
-                                  key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
-            with in_cols[wc + 1]:
-                if st.button("＋", key=f"{prefix}_aw_{rid}", help="Add weight box"):
-                    row["wc"] += 1
-                    st.rerun()
-            with in_cols[wc + 2]:
-                if st.button("🗑", key=f"{prefix}_rm_{rid}", help="Remove row"):
-                    st.session_state[rows_key] = [r for r in rows if r["id"] != rid]
-                    st.rerun()
+            # Add weight button below colour block
+            if st.button("＋ Weight", key=f"{prefix}_aw_{rid}", help="Add weight box"):
+                row["wc"] += 1
+                st.rerun()
 
             st.markdown("---")
 
