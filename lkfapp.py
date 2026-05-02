@@ -3709,17 +3709,16 @@ elif menu == "Edit PO":
                 }
 
                 if new_image:
-                    with st.spinner("Uploading new image to Drive..."):
+                    with st.spinner("Uploading new image to Firebase Storage..."):
                         try:
-                            ext     = new_image.name.rsplit(".", 1)[-1]
-                            img_res = upload_to_drive(
+                            ext       = new_image.name.rsplit(".", 1)[-1]
+                            image_url = upload_to_firebase_storage(
                                 new_img_bytes,
-                                f"PO_{search_id.strip()}_image.{ext}",
+                                f"po_images/PO_{search_id.strip()}_image.{ext}",
                                 new_image.type,
-                                folder_id=PO_IMAGES_FOLDER
                             )
-                            update_data["image"]          = img_res["url"]
-                            update_data["image_drive_id"] = img_res["id"]
+                            update_data["image"]          = image_url
+                            update_data["image_drive_id"] = ""
                             _fetch_image_bytes.clear()   # clear cache so new image shows
                         except Exception as e:
                             st.warning(f"Image upload failed: {e}")
