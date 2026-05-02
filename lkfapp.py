@@ -1483,104 +1483,107 @@ elif menu == "Process Out":
         m = re.match(r"^(\d+)", lot_no.strip().upper())
         return m.group(1) if m else ""
 
-    def build_process_out_pdf(header: dict, lots: list) -> bytes:
-        buf = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buf, pagesize=A4,
-            topMargin=1.5*cm, bottomMargin=1.5*cm,
-            leftMargin=1.5*cm, rightMargin=1.5*cm,
-        )
-        styles  = getSampleStyleSheet()
-        normal  = styles["Normal"]
-        elements = []
-        small_s = ParagraphStyle("sm",  parent=normal, fontSize=9)
-        bold_s  = ParagraphStyle("b",   parent=normal, fontName="Helvetica-Bold", fontSize=10)
-        ctr_s   = ParagraphStyle("ctr", parent=normal, alignment=1)            # centre
-        co_name_s = ParagraphStyle("co", parent=normal, fontName="Helvetica-Bold",
-                                   fontSize=14, alignment=1)
-        co_addr_s = ParagraphStyle("ca", parent=normal, fontSize=10, alignment=1)
-        title_s   = ParagraphStyle("ti", parent=normal, fontName="Helvetica-Bold",
-                                   fontSize=12, alignment=1)
+    def build_challan_html(header: dict, lots: list) -> str:
+        """Build a printable HTML challan — no PDF needed."""
+        from datetime import datetime as _dt
+        raw_date = header.get("Date", "")
+        try:
+            disp_date = _dt.strptime(raw_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except Exception:
+            disp_date = raw_date
 
-        # ── Company letterhead ──────────────────────────────
-        lh_left  = Table(
-            [[Paragraph("GSTIN No :  03AAECL9162H1Z1", small_s)],
-             [Paragraph("PAN No    :  AAECL9162H",     small_s)]],
-            colWidths=[7*cm]
-        )
-        lh_right = Table(
-            [[Paragraph("Phone :  98766-82001", small_s)]],
-            colWidths=[7*cm]
-        )
-        lh_right.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT")]))
-
-        letterhead = Table(
-            [[lh_left, "", lh_right]],
-            colWidths=[7*cm, 4*cm, 7*cm],
-        )
-        letterhead.setStyle(TableStyle([
-            ("BOX",    (0, 0), (-1, -1), 0.8, colors.black),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("PADDING",(0, 0), (-1, -1), 6),
-        ]))
-        elements.append(letterhead)
-        elements.append(Spacer(1, 0.15*cm))
-
-        # Company name + address centred
-        elements.append(Paragraph("LOVELY KNITFAB PVT LTD",   co_name_s))
-        elements.append(Paragraph("HB NO.85, VILL. KASABAD",  co_addr_s))
-        elements.append(Paragraph("LUDHIANA",                  co_addr_s))
-        elements.append(Spacer(1, 0.3*cm))
-
-        # Challan title (underlined style)
-        elements.append(Paragraph(
-            '<u><b>JOB WORK CHALLAN (OUTWARD)</b></u>', title_s))
-        elements.append(Spacer(1, 0.4*cm))
-
-        # ── Challan header table ────────────────────────────
-        h_rows = [
-            ["Challan No", str(header.get("ChallanNo", "")),  "Date",       str(header.get("Date", ""))],
-            ["Party",      str(header.get("PartyName", "")),  "GST No",     str(header.get("GstNo", "—"))],
-            ["Vehicle No", str(header.get("VehicleNo", "")),  "",           ""],
-        ]
-        ht = Table(h_rows, colWidths=_TABLE_COL_WIDTHS)
-        ht.setStyle(_base_table_style())
-        elements.append(ht)
-        elements.append(Spacer(1, 0.4*cm))
-
-        # Lots table — Customer removed, Process uses Paragraph for word wrap
-        # Column widths total = 18cm (A4 - 3cm margins)
-        lot_col_widths = [0.7*cm, 2.0*cm, 2.0*cm, 3.0*cm, 2.5*cm, 1.3*cm, 1.3*cm, 3.5*cm, 1.7*cm]
-        lot_header = ["#", "Lot No", "Order ID", "Item", "Colour", "Roll", "Qty", "Process", "Dia/GSM"]
-        lot_rows   = [lot_header]
+        lot_rows_html = ""
         for i, lot in enumerate(lots, 1):
-            lot_rows.append([
-                str(i),
-                str(lot.get("LotNo", "")),
-                str(lot.get("OrderId", "")),
-                str(lot.get("Item", "")),
-                str(lot.get("Colour", "")),
-                str(lot.get("Roll", "")),
-                str(lot.get("Qnty", "")),
-                Paragraph(str(lot.get("Process", "")), small_s),
-                str(lot.get("DiaGsm", "")),
-            ])
+            bg = "" if i % 2 == 0 else "background:#f9f9f9;"
+            lot_rows_html += f"""
+            <tr style="{bg}">
+              <td>{i}</td>
+              <td>{lot.get("LotNo","")}</td>
+              <td>{lot.get("OrderId","")}</td>
+              <td>{lot.get("Item","")}</td>
+              <td>{lot.get("Colour","")}</td>
+              <td style="text-align:center">{lot.get("Roll","")}</td>
+              <td style="text-align:center">{lot.get("Qnty","")}</td>
+              <td>{lot.get("Process","")}</td>
+              <td style="text-align:center">{lot.get("DiaGsm","")}</td>
+            </tr>"""
 
-        lt = Table(lot_rows, colWidths=lot_col_widths, repeatRows=1)
-        lt.setStyle(TableStyle([
-            ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#1a3c6e")),
-            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTNAME",    (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE",    (0, 0), (-1, -1), 8),
-            ("GRID",        (0, 0), (-1, -1), 0.5, colors.grey),
-            ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-            ("PADDING",     (0, 0), (-1, -1), 4),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f5")]),
-        ]))
-        elements.append(lt)
-        doc.build(elements)
-        return buf.getvalue()
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: Arial, sans-serif; font-size: 10pt; padding: 10mm; color: #111; }}
+  .print-btn {{
+    background: #1a3c6e; color: white; border: none; padding: 8px 24px;
+    font-size: 11pt; cursor: pointer; border-radius: 4px; margin-bottom: 12px;
+    display: block;
+  }}
+  @media print {{
+    .print-btn {{ display: none; }}
+    body {{ padding: 5mm; }}
+  }}
+  .lh-box {{ border: 1px solid #333; padding: 5px 10px; display: flex;
+             justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }}
+  .co-name {{ text-align: center; font-size: 14pt; font-weight: bold; margin: 6px 0 2px; }}
+  .co-addr {{ text-align: center; font-size: 10pt; }}
+  .ch-title {{ text-align: center; font-size: 12pt; font-weight: bold;
+               text-decoration: underline; margin: 8px 0 10px; }}
+  .hdr-table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
+  .hdr-table td {{ border: 0.5px solid #999; padding: 4px 6px; font-size: 9.5pt; }}
+  .hdr-table td.lbl {{ background: #dce6f7; font-weight: bold; width: 15%; }}
+  .lots-table {{ width: 100%; border-collapse: collapse; font-size: 8.5pt; }}
+  .lots-table th {{ background: #1a3c6e; color: white; padding: 5px 4px;
+                    text-align: left; border: 0.5px solid #666; }}
+  .lots-table td {{ border: 0.5px solid #bbb; padding: 4px; vertical-align: top; }}
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">🖨️ Print Challan</button>
+
+<div class="lh-box">
+  <div>
+    <div>GSTIN No : &nbsp;03AAECL9162H1Z1</div>
+    <div>PAN No &nbsp;&nbsp;&nbsp;: &nbsp;AAECL9162H</div>
+  </div>
+  <div>Phone : 98766-82001</div>
+</div>
+
+<div class="co-name">LOVELY KNITFAB PVT LTD</div>
+<div class="co-addr">HB NO.85, VILL. KASABAD</div>
+<div class="co-addr">LUDHIANA</div>
+
+<div class="ch-title">JOB WORK CHALLAN (OUTWARD)</div>
+
+<table class="hdr-table">
+  <tr>
+    <td class="lbl">Challan No</td><td>{header.get("ChallanNo","")}</td>
+    <td class="lbl">Date</td><td>{disp_date}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Party</td><td>{header.get("PartyName","")}</td>
+    <td class="lbl">GST No</td><td>{header.get("GstNo","—")}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Vehicle No</td><td>{header.get("VehicleNo","")}</td>
+    <td class="lbl"></td><td></td>
+  </tr>
+</table>
+
+<table class="lots-table">
+  <thead>
+    <tr>
+      <th>#</th><th>Lot No</th><th>Order ID</th><th>Item</th><th>Colour</th>
+      <th>Roll</th><th>Qty</th><th>Process</th><th>Dia/GSM</th>
+    </tr>
+  </thead>
+  <tbody>
+    {lot_rows_html}
+  </tbody>
+</table>
+</body>
+</html>"""
 
     # ── Session state init ──
     if "proc_out_result" not in st.session_state:
@@ -1698,24 +1701,20 @@ elif menu == "Process Out":
                         "GstNo":     gst_no,
                         "VehicleNo": vehicle.strip(),
                     }
-                    pdf_name  = f"ProcessOut_{challan_no}.pdf"
-
                     with st.spinner("Saving..."):
-                        # Generate PDF fresh — not stored anywhere
-                        pdf_bytes = build_process_out_pdf(header, st.session_state.proc_out_lots)
-
-                        # Save each lot as a separate Firestore doc under the same ChallanNo
+                        # Save lots to Firestore
                         for lot in st.session_state.proc_out_lots:
                             doc_id = f"{challan_no}_{lot['LotNo']}"
                             db.collection("process_out").document(doc_id).set({
                                 **header,
                                 **lot,
                             })
+                        # Build HTML challan for on-screen display
+                        challan_html = build_challan_html(header, st.session_state.proc_out_lots)
 
                     st.session_state.proc_out_result = {
-                        "challan_no": challan_no,
-                        "pdf_bytes":  pdf_bytes,
-                        "pdf_name":   pdf_name,
+                        "challan_no":  challan_no,
+                        "challan_html": challan_html,
                     }
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_out_lots = []
@@ -1726,15 +1725,12 @@ elif menu == "Process Out":
         # ── Result card ──
         if st.session_state.proc_out_result:
             res = st.session_state.proc_out_result
-            st.success(f"✅ Process Out Challan **{res['challan_no']}** saved!")
-            if res.get("pdf_bytes"):
-                st.download_button(
-                    "⬇️ Download Challan PDF",
-                    res["pdf_bytes"],
-                    res["pdf_name"],
-                    "application/pdf",
-                    key="proc_out_dl",
-                )
+            st.success(f"✅ Challan **{res['challan_no']}** saved — click Print inside the challan below")
+            if res.get("challan_html"):
+                n_lots   = len(st.session_state.get("proc_out_lots", [])) or 10
+                ch_height = max(650, 480 + n_lots * 28)
+                import streamlit.components.v1 as _cv1
+                _cv1.html(res["challan_html"], height=ch_height, scrolling=True)
 
     with tab_view:
         rows = [{**doc.to_dict(), "Date": _fmt_date(doc.to_dict().get("Date",""))} for doc in db.collection("process_out").stream()]
@@ -1782,15 +1778,11 @@ elif menu == "Process Out":
                 lot_keys    = ["LotNo","OrderId","Item","Colour","Roll","Qnty","Process","DiaGsm"]
                 reprint_lots = [{k: d.get(k, "") for k in lot_keys} for d in lots_sorted]
 
-                pdf_bytes = build_process_out_pdf(reprint_header, reprint_lots)
+                challan_html = build_challan_html(reprint_header, reprint_lots)
                 st.success(f"Challan **{ch}** — {len(reprint_lots)} lot(s)  |  Party: **{party_name}**")
-                st.download_button(
-                    f"⬇️ Download ProcessOut_{ch}.pdf",
-                    pdf_bytes,
-                    f"ProcessOut_{ch}.pdf",
-                    "application/pdf",
-                    key="reprint_dl",
-                )
+                import streamlit.components.v1 as _cv1r
+                ch_height = max(650, 480 + len(reprint_lots) * 28)
+                _cv1r.html(challan_html, height=ch_height, scrolling=True)
 
 elif menu == "Process Inward":
     st.markdown('<div class="page-header"><h1>📥 Process Inward</h1></div>', unsafe_allow_html=True)
