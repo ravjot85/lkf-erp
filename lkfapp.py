@@ -592,7 +592,7 @@ def _load_status_df():
     proc_out_raw  = [d.to_dict() for d in db.collection("process_out").stream()]
     proc_in_ids   = {d.to_dict().get("OrderId","") for d in db.collection("process_inward").stream()}
     cancel_ids    = {d.to_dict().get("OrderId","") for d in db.collection("cancel_orders").stream()
-                     if d.to_dict().get("Status") == "VALID"}
+                     if d.to_dict().get("Status","VALID").upper().strip() != "INVALID"}
 
     # Load packing list data — group by BASE numeric OrderId
     # e.g. "1001A", "1001B", "1001" all map to base "1001"
