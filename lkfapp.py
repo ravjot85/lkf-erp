@@ -1342,27 +1342,38 @@ elif menu == "Shoot Order":
         pdf_name  = f"ShootOrder_{order_id_input.strip()}_{shoot_date_str}.pdf"
 
         with st.spinner("Generating Shoot Order PDF..."):
-            # Step 1: fetch image from Drive
+            # Step 1: fetch image (Firebase Storage URL or Drive)
             img_bytes = None
-            if po_data.get("image_drive_id"):
+            image_url = po_data.get("image", "")
+            drive_id  = po_data.get("image_drive_id", "")
+            if image_url and image_url.startswith("http"):
                 try:
-                    img_bytes = download_from_drive(po_data["image_drive_id"])
+                    import urllib.request as _ur
+                    with _ur.urlopen(image_url) as _resp:
+                        img_bytes = _resp.read()
+                except Exception as e:
+                    st.warning(f"Could not fetch image: {e}")
+            elif drive_id:
+                try:
+                    img_bytes = download_from_drive(drive_id)
                 except Exception as e:
                     st.warning(f"Could not fetch image from Drive: {e}")
-            elif not po_data.get("image_drive_id"):
+            else:
                 st.info("No image on record for this PO — PDF will be generated without image.")
 
             # Step 2: generate PDF
             pdf_bytes = build_shoot_order_pdf(shoot_data, img_bytes)
 
-            # Step 3: upload PDF to Drive
+            # Step 3: upload PDF to Firebase Storage
             try:
-                pdf_res  = upload_to_drive(pdf_bytes, pdf_name, "application/pdf",
-                                           folder_id=SHOOT_PDF_FOLDER)
-                pdf_url  = pdf_res["url"]
+                pdf_url = upload_to_firebase_storage(
+                    pdf_bytes,
+                    f"shoot_pdfs/{pdf_name}",
+                    "application/pdf",
+                )
                 shoot_data["pdf_url"] = pdf_url
             except Exception as e:
-                st.warning(f"PDF upload to Drive failed: {e}. Use the download button below.")
+                st.warning(f"Firebase Storage upload failed: {e}. Use the download button below.")
 
         db.collection("shoot_order").add(shoot_data)
 
