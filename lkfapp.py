@@ -1548,7 +1548,7 @@ elif menu == "Process Out":
     if "proc_out_lots" not in st.session_state:
         st.session_state.proc_out_lots = []
 
-    tab_add, tab_view = st.tabs(["Add Challan", "View Records"])
+    tab_add, tab_view, tab_print = st.tabs(["Add Challan", "View Records", "🖨️ Print Challan"])
 
     with tab_add:
         st.success(f"Challan No: **{st.session_state.proc_out_challan_no}**")
@@ -1656,19 +1656,11 @@ elif menu == "Process Out":
                         "GstNo":     gst_no,
                         "VehicleNo": vehicle.strip(),
                     }
-                    pdf_url   = ""
-                    pdf_bytes = None
                     pdf_name  = f"ProcessOut_{challan_no}.pdf"
 
                     with st.spinner("Saving..."):
-                        try:
-                            pdf_bytes = build_process_out_pdf(header, st.session_state.proc_out_lots)
-                            pdf_res   = upload_to_drive(pdf_bytes, pdf_name, "application/pdf",
-                                                        folder_id=PROC_OUT_PDF_FOLDER)
-                            pdf_url   = pdf_res["url"]
-                        except Exception as e:
-                            st.warning(f"Drive error: {e}")
-                            pdf_bytes = build_process_out_pdf(header, st.session_state.proc_out_lots)
+                        # Generate PDF fresh — not stored anywhere
+                        pdf_bytes = build_process_out_pdf(header, st.session_state.proc_out_lots)
 
                         # Save each lot as a separate Firestore doc under the same ChallanNo
                         for lot in st.session_state.proc_out_lots:
@@ -1676,13 +1668,11 @@ elif menu == "Process Out":
                             db.collection("process_out").document(doc_id).set({
                                 **header,
                                 **lot,
-                                "pdf_url": pdf_url,
                             })
 
                     st.session_state.proc_out_result = {
                         "challan_no": challan_no,
                         "pdf_bytes":  pdf_bytes,
-                        "pdf_url":    pdf_url,
                         "pdf_name":   pdf_name,
                     }
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
@@ -1695,11 +1685,8 @@ elif menu == "Process Out":
         if st.session_state.proc_out_result:
             res = st.session_state.proc_out_result
             st.success(f"✅ Process Out Challan **{res['challan_no']}** saved!")
-            rc1, rc2 = st.columns(2)
-            if res.get("pdf_url"):
-                rc1.markdown(f"[📄 Open Challan in Drive]({res['pdf_url']})")
             if res.get("pdf_bytes"):
-                rc2.download_button(
+                st.download_button(
                     "⬇️ Download Challan PDF",
                     res["pdf_bytes"],
                     res["pdf_name"],
@@ -1716,6 +1703,52 @@ elif menu == "Process Out":
             st.dataframe(df[cols].sort_values("ChallanNo", ascending=False), use_container_width=True)
         else:
             st.info("No Process Out records yet")
+
+    with tab_print:
+        st.markdown("#### 🖨️ Print / Reprint Challan")
+        st.caption("Enter a challan number to regenerate and download its PDF from saved records.")
+        pr_col1, pr_col2 = st.columns([2, 1])
+        with pr_col1:
+            print_challan_no = st.text_input("Challan Number", placeholder="e.g. 1001", key="print_ch_no")
+        with pr_col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            print_btn = st.button("Generate PDF", type="primary", key="print_ch_btn")
+
+        if print_btn and print_challan_no.strip():
+            ch = print_challan_no.strip()
+            with st.spinner(f"Fetching challan {ch}..."):
+                ch_docs = [d.to_dict() for d in db.collection("process_out")
+                           .where("ChallanNo", "==", ch).stream()]
+            if not ch_docs:
+                st.error(f"No records found for Challan No **{ch}**")
+            else:
+                # Rebuild header from first doc
+                first = ch_docs[0]
+                party_name = first.get("PartyName", "")
+                # Refresh GST No from master
+                p_doc  = db.collection("processor_master").document(party_name).get()
+                gst_no = p_doc.to_dict().get("GstNo", "") if p_doc.exists else first.get("GstNo", "")
+                reprint_header = {
+                    "ChallanNo": first.get("ChallanNo", ch),
+                    "Date":      first.get("Date", ""),
+                    "PartyName": party_name,
+                    "GstNo":     gst_no,
+                    "VehicleNo": first.get("VehicleNo", ""),
+                }
+                # Collect lots sorted by LotNo
+                lots_sorted = sorted(ch_docs, key=lambda d: str(d.get("LotNo", "")))
+                lot_keys    = ["LotNo","OrderId","Item","Colour","Roll","Qnty","Process","DiaGsm"]
+                reprint_lots = [{k: d.get(k, "") for k in lot_keys} for d in lots_sorted]
+
+                pdf_bytes = build_process_out_pdf(reprint_header, reprint_lots)
+                st.success(f"Challan **{ch}** — {len(reprint_lots)} lot(s)  |  Party: **{party_name}**")
+                st.download_button(
+                    f"⬇️ Download ProcessOut_{ch}.pdf",
+                    pdf_bytes,
+                    f"ProcessOut_{ch}.pdf",
+                    "application/pdf",
+                    key="reprint_dl",
+                )
 
 elif menu == "Process Inward":
     st.markdown('<div class="page-header"><h1>📥 Process Inward</h1></div>', unsafe_allow_html=True)
