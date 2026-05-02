@@ -1342,22 +1342,25 @@ elif menu == "Shoot Order":
         pdf_name  = f"ShootOrder_{order_id_input.strip()}_{shoot_date_str}.pdf"
 
         with st.spinner("Generating Shoot Order PDF..."):
-            # Step 1: fetch image (Firebase Storage URL or Drive)
+            # Step 1: fetch image — Drive ID takes priority, then Firebase Storage URL
             img_bytes = None
             image_url = po_data.get("image", "")
             drive_id  = po_data.get("image_drive_id", "")
-            if image_url and image_url.startswith("http"):
+            if drive_id:
+                # Old POs: image in Google Drive — must use service account download
+                try:
+                    img_bytes = download_from_drive(drive_id)
+                except Exception as e:
+                    st.warning(f"Could not fetch image from Drive: {e}")
+            elif image_url and ("storage.googleapis.com" in image_url or
+                                "firebasestorage.googleapis.com" in image_url):
+                # New POs: image in Firebase Storage — direct download
                 try:
                     import urllib.request as _ur
                     with _ur.urlopen(image_url) as _resp:
                         img_bytes = _resp.read()
                 except Exception as e:
-                    st.warning(f"Could not fetch image: {e}")
-            elif drive_id:
-                try:
-                    img_bytes = download_from_drive(drive_id)
-                except Exception as e:
-                    st.warning(f"Could not fetch image from Drive: {e}")
+                    st.warning(f"Could not fetch image from Firebase Storage: {e}")
             else:
                 st.info("No image on record for this PO — PDF will be generated without image.")
 
