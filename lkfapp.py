@@ -2212,9 +2212,9 @@ elif menu == "Packing":
         return buf.getvalue()
 
     # ── Session state ──
-    if "pack_fabric_rows"    not in st.session_state: st.session_state.pack_fabric_rows    = [{"id": 0, "wc": 1}]
+    if "pack_fabric_rows"    not in st.session_state: st.session_state.pack_fabric_rows    = [{"id": 0, "wc": 12}]
     if "pack_fabric_nid"     not in st.session_state: st.session_state.pack_fabric_nid     = 1
-    if "pack_acc_rows"       not in st.session_state: st.session_state.pack_acc_rows       = [{"id": 0, "wc": 1}]
+    if "pack_acc_rows"       not in st.session_state: st.session_state.pack_acc_rows       = [{"id": 0, "wc": 12}]
     if "pack_acc_nid"        not in st.session_state: st.session_state.pack_acc_nid        = 1
     if "pack_result"         not in st.session_state: st.session_state.pack_result         = None
     if "pack_last_oid"       not in st.session_state: st.session_state.pack_last_oid       = ""
@@ -2223,9 +2223,9 @@ elif menu == "Packing":
     def _clear_packing():
         for k in [k for k in st.session_state if k.startswith(("fc_", "ac_", "pack_oid", "pack_item"))]:
             del st.session_state[k]
-        st.session_state.pack_fabric_rows = [{"id": 0, "wc": 1}]
+        st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
         st.session_state.pack_fabric_nid  = 1
-        st.session_state.pack_acc_rows    = [{"id": 0, "wc": 1}]
+        st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
         st.session_state.pack_acc_nid     = 1
         st.session_state.pack_result      = None
         st.session_state.pack_last_oid    = ""
@@ -2315,7 +2315,7 @@ elif menu == "Packing":
         if st.button(f"＋ Add {section_label.split()[0]} Row", key=f"{prefix}_addrow"):
             nid = st.session_state[nid_key]
             st.session_state[nid_key] += 1
-            st.session_state[rows_key].append({"id": nid, "wc": 1})
+            st.session_state[rows_key].append({"id": nid, "wc": 12})
             st.rerun()
 
         # Live output preview
