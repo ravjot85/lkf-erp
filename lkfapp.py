@@ -2087,11 +2087,10 @@ elif menu == "Packing":
                 total = round(sum(float(w) for w in weights), 2)
             except Exception:
                 total = 0.0
-            rolls = len(weights)
-            chunks     = [weights[i:i+10] for i in range(0, len(weights), 10)]
-            wt_display = "<br/>".join(", ".join(w + " Kg" for w in chunk) for chunk in chunks)
+            rolls  = len(weights)
+            chunks = [weights[i:i+10] for i in range(0, len(weights), 10)]
             return {"colour": colour.strip(), "weights": weights,
-                    "rolls": rolls, "total": total, "wt_display": wt_display}
+                    "rolls": rolls, "total": total, "chunks": chunks}
 
         # ── Section table ──
         def section_table(lines, title):
@@ -2107,16 +2106,26 @@ elif menu == "Packing":
                 Paragraph("<b>Colour</b>",      bold_s),
                 Paragraph("<b>Rolls</b>",        bold_s),
                 Paragraph("<b>Total Wt</b>",     bold_s),
-                Paragraph("<b>Roll Weights</b>", bold_s),
+                Paragraph("<b>Roll Weights (max 10 per row)</b>", bold_s),
             ]
             tbl_data = [hdr_row]
             for p in parsed:
-                tbl_data.append([
-                    Paragraph(p["colour"],     normal),
-                    Paragraph(str(p["rolls"]), normal),
-                    Paragraph(str(p["total"]), normal),
-                    Paragraph(p["wt_display"], small_s),
-                ])
+                for j, chunk in enumerate(p["chunks"]):
+                    wt_row = ", ".join(w + " Kg" for w in chunk)
+                    if j == 0:
+                        tbl_data.append([
+                            Paragraph(p["colour"],          normal),
+                            Paragraph(str(p["rolls"]),      normal),
+                            Paragraph(str(p["total"]) + " Kg", normal),
+                            Paragraph(wt_row,               small_s),
+                        ])
+                    else:
+                        tbl_data.append([
+                            Paragraph("",    normal),
+                            Paragraph("",    normal),
+                            Paragraph("",    normal),
+                            Paragraph(wt_row, small_s),
+                        ])
 
             ct = Table(tbl_data, colWidths=[5*cm, 1.5*cm, 2.5*cm, 9*cm], repeatRows=1)
             ct.setStyle(TableStyle([
