@@ -293,6 +293,7 @@ _REPORTS = [
     "⚙️ In Production",
     "❌ Cancelled",
     "👤 Customer Report",
+    "👤 Customer Pending",
     "🔍 Pending Drill-Down",
     "📦 Pending by Item",
     "🔄 Processing Report",
@@ -955,11 +956,56 @@ if menu == "Dashboard":
     with e1:
         with st.expander(f"📋 Pending by Customer ({len(pending_df)} orders)", expanded=True):
             if not pending_df.empty:
+                if "dash_cust" not in st.session_state:
+                    st.session_state.dash_cust = None
+
                 tbl = (pending_df.groupby("Customer")
                        .agg(Orders=("OrderId","count"), Qty=("FabricQty","sum"))
                        .sort_values("Qty", ascending=False).reset_index())
-                st.caption(f"Total Qty: **{int(tbl['Qty'].sum()):,}**")
-                st.dataframe(tbl, use_container_width=True, hide_index=True)
+                st.caption(f"Total Qty: **{int(tbl['Qty'].sum()):,}**  •  Click a customer to see pending orders")
+
+                # Header
+                hh1, hh2, hh3 = st.columns([4, 1, 2])
+                hh1.markdown("**Customer**"); hh2.markdown("**Orders**"); hh3.markdown("**Qty (KG)**")
+                st.markdown('<hr style="margin:3px 0 6px">', unsafe_allow_html=True)
+
+                for _, row in tbl.iterrows():
+                    is_sel = st.session_state.dash_cust == row["Customer"]
+                    rc1, rc2, rc3 = st.columns([4, 1, 2])
+                    bg = "background:#E3F2FD;border-radius:4px;padding:2px 6px;" if is_sel else "padding:2px 6px;"
+                    rc1.markdown(f'<div style="{bg}">{"▶ " if is_sel else ""}{row["Customer"]}</div>', unsafe_allow_html=True)
+                    rc2.markdown(f'<div style="{bg}">{int(row["Orders"])}</div>', unsafe_allow_html=True)
+                    rc3.markdown(f'<div style="{bg}">{int(row["Qty"]):,}</div>', unsafe_allow_html=True)
+                    if st.button("Details" if not is_sel else "Close", key=f"dc_{row['Customer']}", use_container_width=True):
+                        st.session_state.dash_cust = None if is_sel else row["Customer"]
+                        st.rerun()
+
+                # Detail popup for selected customer
+                if st.session_state.dash_cust:
+                    sel_cust = st.session_state.dash_cust
+                    cust_pend = pending_df[pending_df["Customer"] == sel_cust].sort_values("OrderId", ascending=False)
+                    st.markdown(f"---\n**Pending orders for {sel_cust}** ({len(cust_pend)} orders · {int(cust_pend['FabricQty'].sum()):,} KG)")
+                    for _, o in cust_pend.iterrows():
+                        with st.expander(f"{o['OrderId']}  |  {o['Item']}  |  {int(o['FabricQty']):,} KG  |  {o['Date']}"):
+                            dc1, dc2 = st.columns(2)
+                            dc1.markdown(f"**Category:** {o['Category']}")
+                            dc1.markdown(f"**GSM:** {int(o['GSM']) if o['GSM'] else '—'}")
+                            dc1.markdown(f"**Fabric Qty:** {int(o['FabricQty']):,} KG")
+                            dc1.markdown(f"**Fabric Price:** ₹{int(o['FabricPrice'])}")
+                            dc2.markdown(f"**Acc Qty:** {int(o['AccQty'])}")
+                            dc2.markdown(f"**Acc Price:** ₹{int(o['AccPrice'])}")
+                            if o.get("Accessory"):
+                                st.markdown(f"**Accessory:** {o['Accessory']}")
+                            if o.get("coloursinstructions") or True:
+                                po_raw = db.collection("po").document(str(o["OrderId"])).get()
+                                if po_raw.exists:
+                                    po_d = po_raw.to_dict()
+                                    if po_d.get("coloursinstructions"):
+                                        st.markdown(f"**Colours/Instructions:** {po_d['coloursinstructions']}")
+                                    if po_d.get("accessory"):
+                                        st.markdown(f"**Accessory Details:** {po_d['accessory']}")
+                                    if po_d.get("pdf_url"):
+                                        st.markdown(f"[📄 View PO PDF]({po_d['pdf_url']})")
 
     with e2:
         with st.expander("📋 Pending by Category", expanded=True):
@@ -2995,6 +3041,50 @@ elif menu == "Reports":
                                            "application/pdf", key="cr_dl")
                     except Exception as e:
                         st.error(f"PDF error: {e}")
+
+    # ══════════════════════════════════════════════════════
+    #  CUSTOMER PENDING REPORT
+    # ══════════════════════════════════════════════════════
+     elif rpt_type == "👤 Customer Pending":
+        st.markdown("### 👤 Customer Pending Report")
+
+        customers_list = get_customer_list()
+        cp_cust = st.selectbox("Select Customer", customers_list, index=None,
+                               placeholder="Choose customer...", key="cp_cust")
+
+        if cp_cust:
+            cust_key   = cp_cust.upper().strip().replace(" ", "")
+            cp_df      = pending_df[pending_df["Customer"] == cust_key].sort_values("OrderId", ascending=False)
+
+            if cp_df.empty:
+                st.info(f"No pending orders for **{cp_cust}**")
+            else:
+                st.success(f"**{len(cp_df)} pending orders** · **{int(cp_df['FabricQty'].sum()):,} KG total**")
+                st.divider()
+
+                for _, row in cp_df.iterrows():
+                    oid = str(row["OrderId"])
+                    po_doc = db.collection("po").document(oid).get()
+                    po_d   = po_doc.to_dict() if po_doc.exists else {}
+
+                    with st.expander(f"**{oid}**  |  {row['Item']}  |  {int(row['FabricQty']):,} KG  |  {row['Date']}", expanded=False):
+                        r1, r2 = st.columns(2)
+                        r1.markdown(f"**Category:** {row['Category']}")
+                        r1.markdown(f"**GSM:** {int(row['GSM']) if row['GSM'] else '—'}")
+                        r1.markdown(f"**Fabric Qty:** {int(row['FabricQty']):,} KG")
+                        r1.markdown(f"**Fabric Price:** ₹{int(row['FabricPrice'])}")
+                        r2.markdown(f"**Acc Qty:** {int(row['AccQty'])}")
+                        r2.markdown(f"**Acc Price:** ₹{int(row['AccPrice'])}")
+                        r2.markdown(f"**Customer PO No:** {po_d.get('customerpono','—')}")
+
+                        if po_d.get("coloursinstructions"):
+                            st.markdown(f"**Colours/Instructions:** {po_d['coloursinstructions']}")
+                        if po_d.get("accessory"):
+                            st.markdown(f"**Accessory Description:** {po_d['accessory']}")
+                        if row.get("pdf_url"):
+                            st.markdown(f"[📄 View PO PDF]({row['pdf_url']})")
+                        elif po_d.get("pdf_url"):
+                            st.markdown(f"[📄 View PO PDF]({po_d['pdf_url']})")
 
     # ══════════════════════════════════════════════════════
     #  DRILL-DOWN TAB
