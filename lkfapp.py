@@ -507,6 +507,11 @@ def build_po_pdf(d: dict, image_bytes: bytes = None) -> bytes:
         elements.append(Paragraph(str(d["coloursinstructions"]), styles["Normal"]))
         elements.append(Spacer(1, 0.4*cm))
 
+    if d.get("accessory"):
+        elements.append(Paragraph("<b>Accessory Description:</b>", styles["Normal"]))
+        elements.append(Paragraph(str(d["accessory"]), styles["Normal"]))
+        elements.append(Spacer(1, 0.4*cm))
+
     if image_bytes:
         _embed_image(elements, image_bytes)
 
@@ -1193,6 +1198,7 @@ elif menu == "PO":
         fabric_price          = st.number_input("Fabric Price",    min_value=0, value=None, placeholder="0")
         accessory_price       = st.number_input("Accessory Price", min_value=0, value=None, placeholder="0")
         colours_instructions  = st.text_area("Colours Instructions")
+        accessory_desc        = st.text_area("Accessory Description", placeholder="e.g. 500 buttons, 200 labels...")
         customer_po_no        = st.text_input("Customer PO No")
         uploaded_image        = st.file_uploader(
             "Product Image", type=["jpg", "jpeg", "png", "webp"]
@@ -1225,6 +1231,7 @@ elif menu == "PO":
                 "accessoryqnty":        accessory_qnty or 0,
                 "accessoryprice":       accessory_price or 0,
                 "coloursinstructions":  colours_instructions,
+                "accessory":            accessory_desc,
             }
 
             with st.spinner("Uploading to Firebase Storage & generating PDF..."):
