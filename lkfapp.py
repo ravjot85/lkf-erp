@@ -2010,6 +2010,12 @@ elif menu == "Packing":
     (function() {
         var pendingFocus = false;
 
+        function allWtInputs() {
+            return Array.from(window.parent.document.querySelectorAll('input')).filter(function(i) {
+                return (i.getAttribute('placeholder') || '') === 'Wt';
+            });
+        }
+
         function setupWeightEnter() {
             var doc = window.parent.document;
             doc.querySelectorAll('input').forEach(function(inp) {
@@ -2019,15 +2025,27 @@ elif menu == "Packing":
                 inp.addEventListener('keydown', function(e) {
                     if (e.key !== 'Enter') return;
                     e.preventDefault();
-                    var allBtns = Array.from(doc.querySelectorAll('button'));
-                    var plusBtns = allBtns.filter(function(b) {
-                        return b.textContent.trim().indexOf('＋') !== -1;
-                    });
-                    for (var i = 0; i < plusBtns.length; i++) {
-                        if (inp.compareDocumentPosition(plusBtns[i]) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            pendingFocus = true;
-                            plusBtns[i].click();
-                            break;
+
+                    // Find the next available Wt input after the current one
+                    var inputs = allWtInputs();
+                    var idx    = inputs.indexOf(inp);
+                    if (idx >= 0 && idx < inputs.length - 1) {
+                        // Move focus to next existing weight box
+                        inputs[idx + 1].focus();
+                        inputs[idx + 1].select();
+                    } else {
+                        // At last box — add a new one via ＋ Weight button
+                        var allBtns  = Array.from(doc.querySelectorAll('button'));
+                        var plusBtns = allBtns.filter(function(b) {
+                            return b.textContent.trim().indexOf('＋') !== -1 &&
+                                   b.textContent.trim().indexOf('Weight') !== -1;
+                        });
+                        for (var i = 0; i < plusBtns.length; i++) {
+                            if (inp.compareDocumentPosition(plusBtns[i]) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                                pendingFocus = true;
+                                plusBtns[i].click();
+                                break;
+                            }
                         }
                     }
                 });
@@ -2036,13 +2054,11 @@ elif menu == "Packing":
 
         var obs = new MutationObserver(function() {
             if (pendingFocus) {
-                // New weight input is the only one not yet bound
-                var wtInputs = Array.from(window.parent.document.querySelectorAll('input')).filter(function(i) {
-                    return (i.getAttribute('placeholder') || '') === 'Wt';
-                });
-                var newInp = wtInputs.find(function(i) { return !i._wEnterBound; });
+                var inputs = allWtInputs();
+                var newInp = inputs.find(function(i) { return !i._wEnterBound; });
                 if (newInp) {
                     newInp.focus();
+                    newInp.select();
                     pendingFocus = false;
                 }
             }
