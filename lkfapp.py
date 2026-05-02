@@ -4223,6 +4223,7 @@ elif menu == "Import Data":
                 "customerpono":       ("Customer PO No",         ["customer po","customer po no","cust po","buyer po","po ref"]),
                 "coloursinstructions":("Colours/Instructions",   ["colours","colour","colors","instructions","remarks"]),
                 "image":              ("Image URL",              ["image","image link","image url","photo","photo link","drive link","picture"]),
+                "accessory":          ("Accessory Description",   ["accessory","accessory desc","accessory details","accessories","acc desc","acc detail"]),
             },
         },
         "Shoot Order": {
@@ -4477,11 +4478,18 @@ elif menu == "Import Data":
                                 "image":               rec.get("image",""),
                                 "image_drive_id":      "",
                                 "pdf_url":             "",
+                                "accessory":           rec.get("accessory",""),
                             }
                             if oid in existing_ids:
-                                skip_cnt += 1 if conflict == "Skip (keep existing)" else 0
-                                if conflict != "Skip (keep existing)":
-                                    db.collection("po").document(oid).update(doc_data); upd_cnt += 1
+                                if conflict == "Skip (keep existing)":
+                                    skip_cnt += 1
+                                else:
+                                    # Only update fields that were explicitly mapped
+                                    # This prevents overwriting existing fields with empty values
+                                    update_data = {k: doc_data[k] for k in rec if k in doc_data}
+                                    update_data["OrderId"] = oid
+                                    db.collection("po").document(oid).update(update_data)
+                                    upd_cnt += 1
                             else:
                                 db.collection("po").document(oid).set(doc_data)
                                 existing_ids.add(oid); new_cnt += 1
