@@ -951,11 +951,53 @@ if menu == "Dashboard":
     with e2:
         with st.expander("📋 Pending by Category", expanded=True):
             if not pending_df.empty:
-                tbl2 = (pending_df.groupby("Category")
-                        .agg(Qty=("FabricQty","sum"), Orders=("OrderId","count"))
-                        .reset_index())
-                tbl2.columns = ["Category", "Pending Qty", "Orders"]
-                st.dataframe(tbl2, use_container_width=True, hide_index=True)
+                if "dash_cat" not in st.session_state:
+                    st.session_state.dash_cat = None
+
+                stripe_df = pending_df[pending_df["Category"] == "STRIPE"]
+                plain_df  = pending_df[pending_df["Category"] == "PLAIN"]
+
+                cb1, cb2 = st.columns(2)
+                with cb1:
+                    s_active = st.session_state.dash_cat == "STRIPE"
+                    if st.button(
+                        f"🔵 STRIPE\n{len(stripe_df)} orders · {int(stripe_df['FabricQty'].sum()):,} KG",
+                        use_container_width=True, key="dash_stripe_btn",
+                        type="primary" if s_active else "secondary"
+                    ):
+                        st.session_state.dash_cat = None if s_active else "STRIPE"
+                        st.rerun()
+                with cb2:
+                    p_active = st.session_state.dash_cat == "PLAIN"
+                    if st.button(
+                        f"🟠 PLAIN\n{len(plain_df)} orders · {int(plain_df['FabricQty'].sum()):,} KG",
+                        use_container_width=True, key="dash_plain_btn",
+                        type="primary" if p_active else "secondary"
+                    ):
+                        st.session_state.dash_cat = None if p_active else "PLAIN"
+                        st.rerun()
+
+                if st.session_state.dash_cat:
+                    sel_df = pending_df[pending_df["Category"] == st.session_state.dash_cat]
+                    items_grp = (
+                        sel_df.groupby("Item")
+                        .agg(Orders=("OrderId","count"), TotalQty=("FabricQty","sum"))
+                        .sort_values("TotalQty", ascending=False)
+                        .reset_index()
+                    )
+                    st.markdown(f"**{st.session_state.dash_cat}** — {int(sel_df['FabricQty'].sum()):,} KG total across {len(sel_df)} orders")
+                    st.markdown("")
+                    for _, row in items_grp.iterrows():
+                        with st.expander(f"📦 {row['Item']}  —  {int(row['TotalQty']):,} KG  ({int(row['Orders'])} orders)"):
+                            item_orders = sel_df[sel_df["Item"] == row["Item"]].sort_values("OrderId", ascending=False)
+                            for _, o in item_orders.iterrows():
+                                cols = st.columns([1.5, 2.5, 1.2, 1.2])
+                                cols[0].markdown(f"**{o['OrderId']}**")
+                                cols[1].markdown(o['Customer'])
+                                cols[2].markdown(o['Date'])
+                                cols[3].markdown(f"**{int(o['FabricQty'])} KG**")
+                                if o.get('pdf_url'):
+                                    st.markdown(f"&nbsp;&nbsp;&nbsp;[📄 View PDF]({o['pdf_url']})")
 
     with e3:
         with st.expander(f"⚙️ In Production by Customer ({len(prod_df)} orders)", expanded=True):
