@@ -1494,34 +1494,36 @@ elif menu == "Process Out":
         elements = []
         _pdf_header(elements, styles, "PROCESS OUT CHALLAN")
 
-        # Challan header table
+        # Challan header table (with GST No, no customer)
+        small_s = ParagraphStyle("sm", parent=styles["Normal"], fontSize=9)
         h_rows = [
-            ["Challan No", str(header.get("ChallanNo", "")), "Date",       str(header.get("Date", ""))],
-            ["Party",      str(header.get("PartyName", "")), "Vehicle No", str(header.get("VehicleNo", ""))],
+            ["Challan No", str(header.get("ChallanNo", "")),  "Date",       str(header.get("Date", ""))],
+            ["Party",      str(header.get("PartyName", "")),  "GST No",     str(header.get("GstNo", "—"))],
+            ["Vehicle No", str(header.get("VehicleNo", "")),  "",           ""],
         ]
         ht = Table(h_rows, colWidths=_TABLE_COL_WIDTHS)
         ht.setStyle(_base_table_style())
         elements.append(ht)
         elements.append(Spacer(1, 0.4*cm))
 
-        # Lots table
-        lot_header = ["#", "Lot No", "Order ID", "Customer", "Item", "Colour", "Roll", "Qty", "Process", "Dia/GSM"]
+        # Lots table — Customer removed, Process uses Paragraph for word wrap
+        # Column widths total = 18cm (A4 - 3cm margins)
+        lot_col_widths = [0.7*cm, 2.0*cm, 2.0*cm, 3.0*cm, 2.5*cm, 1.3*cm, 1.3*cm, 3.5*cm, 1.7*cm]
+        lot_header = ["#", "Lot No", "Order ID", "Item", "Colour", "Roll", "Qty", "Process", "Dia/GSM"]
         lot_rows   = [lot_header]
         for i, lot in enumerate(lots, 1):
             lot_rows.append([
                 str(i),
                 str(lot.get("LotNo", "")),
                 str(lot.get("OrderId", "")),
-                str(lot.get("Customer name", "")),
                 str(lot.get("Item", "")),
                 str(lot.get("Colour", "")),
                 str(lot.get("Roll", "")),
                 str(lot.get("Qnty", "")),
-                str(lot.get("Process", "")),
+                Paragraph(str(lot.get("Process", "")), small_s),
                 str(lot.get("DiaGsm", "")),
             ])
 
-        lot_col_widths = [1*cm, 2.2*cm, 2.2*cm, 3.5*cm, 3*cm, 2.5*cm, 1.5*cm, 1.5*cm, 2.5*cm, 2*cm]
         lt = Table(lot_rows, colWidths=lot_col_widths, repeatRows=1)
         lt.setStyle(TableStyle([
             ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#1a3c6e")),
@@ -1644,10 +1646,14 @@ elif menu == "Process Out":
                     st.error("Select a processor")
                 else:
                     challan_no = st.session_state.proc_out_challan_no
+                    # Fetch GST No from processor master
+                    proc_doc = db.collection("processor_master").document(party).get()
+                    gst_no   = proc_doc.to_dict().get("GstNo", "") if proc_doc.exists else ""
                     header = {
                         "ChallanNo": challan_no,
                         "Date":      po_date_str,
                         "PartyName": party,
+                        "GstNo":     gst_no,
                         "VehicleNo": vehicle.strip(),
                     }
                     pdf_url   = ""
