@@ -4363,6 +4363,7 @@ elif menu == "Import Data":
             if st.button("🚀 Start Import", type="primary", key="imp_start"):
                 all_rows   = st.session_state.imp_sheet_data[1:]
                 skip_cnt = upd_cnt = new_cnt = err_cnt = 0
+                err_rows = []
                 progress   = st.progress(0)
                 status_box = st.empty()
 
@@ -4490,8 +4491,9 @@ elif menu == "Import Data":
                                 db.collection("cancel_orders").document(doc_id).set(doc_data)
                                 existing_ids.add(oid); new_cnt += 1
 
-                    except Exception:
+                    except Exception as _import_err:
                         err_cnt += 1
+                        err_rows.append(f"Row {i+2}: OrderId={rec.get('OrderId','?')} — {_import_err}")
 
                     progress.progress((i + 1) / len(all_rows))
                     status_box.caption(f"Processing row {i+1} of {len(all_rows)}...")
@@ -4499,3 +4501,7 @@ elif menu == "Import Data":
                 progress.empty()
                 status_box.empty()
                 st.success(f"✅ Import complete — **{new_cnt} added**, {upd_cnt} updated, {skip_cnt} skipped, {err_cnt} errors")
+                if err_rows:
+                    with st.expander(f"⚠️ {err_cnt} error(s) — click to see details"):
+                        for msg in err_rows:
+                            st.error(msg)
