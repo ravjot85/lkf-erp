@@ -1510,31 +1510,25 @@ elif menu == "Process Out":
             ));
         }
 
-        var nextFocusIdx = -1;
-
         function setupEnterNav() {
-            getInputs().forEach(function(inp, i) {
+            getInputs().forEach(function(inp) {
                 if (inp._enterBound) return;
                 inp._enterBound = true;
                 inp.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        nextFocusIdx = i + 1;
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    // Re-query live DOM so index is always current
+                    var inputs = getInputs();
+                    var idx = inputs.indexOf(inp);
+                    if (idx >= 0 && idx < inputs.length - 1) {
+                        inputs[idx + 1].focus();
+                        inputs[idx + 1].select();
                     }
                 });
             });
         }
 
-        var observer = new MutationObserver(function() {
-            setupEnterNav();
-            if (nextFocusIdx >= 0) {
-                var inputs = getInputs();
-                if (inputs[nextFocusIdx]) {
-                    inputs[nextFocusIdx].focus();
-                }
-                nextFocusIdx = -1;
-            }
-        });
-
+        var observer = new MutationObserver(setupEnterNav);
         observer.observe(window.parent.document.body, { childList: true, subtree: true });
         setupEnterNav();
     })();
