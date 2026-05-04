@@ -1534,8 +1534,14 @@ elif menu == "Process Out":
             disp_date = raw_date
 
         lot_rows_html = ""
+        total_rolls = 0
+        total_qty   = 0.0
         for i, lot in enumerate(lots, 1):
             bg = "" if i % 2 == 0 else "background:#f9f9f9;"
+            try: total_rolls += int(lot.get("Roll", 0) or 0)
+            except Exception: pass
+            try: total_qty += float(lot.get("Qnty", 0) or 0)
+            except Exception: pass
             lot_rows_html += f"""
             <tr style="{bg}">
               <td>{i}</td>
@@ -1547,6 +1553,15 @@ elif menu == "Process Out":
               <td style="text-align:center">{lot.get("Qnty","")}</td>
               <td>{lot.get("Process","")}</td>
               <td style="text-align:center">{lot.get("DiaGsm","")}</td>
+            </tr>"""
+
+        total_qty_str = str(round(total_qty, 2))
+        grand_total_row = f"""
+            <tr style="background:#dce6f7;font-weight:bold;border-top:2px solid #1a3c6e;">
+              <td colspan="5" style="text-align:right;padding:5px 6px;">GRAND TOTAL</td>
+              <td style="text-align:center;padding:5px 4px;">{total_rolls}</td>
+              <td style="text-align:center;padding:5px 4px;">{total_qty_str}</td>
+              <td colspan="2"></td>
             </tr>"""
 
         return f"""<!DOCTYPE html>
@@ -1621,6 +1636,7 @@ elif menu == "Process Out":
   </thead>
   <tbody>
     {lot_rows_html}
+    {grand_total_row}
   </tbody>
 </table>
 </body>
