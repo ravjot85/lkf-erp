@@ -2411,10 +2411,20 @@ elif menu == "Packing":
 
     pack_po = None
     if order_id_in.strip():
-        po_doc = db.collection("po").document(order_id_in.strip()).get()
+        import re as _re_pack_oid
+        oid_clean = order_id_in.strip()
+        po_doc = db.collection("po").document(oid_clean).get()
         if po_doc.exists:
             pack_po = po_doc.to_dict()
         else:
+            # For suffixed IDs like "1750A", fall back to base numeric "1750"
+            _m = _re_pack_oid.match(r'^(\d+)', oid_clean)
+            _base = _m.group(1) if _m else None
+            if _base and _base != oid_clean:
+                po_doc2 = db.collection("po").document(_base).get()
+                if po_doc2.exists:
+                    pack_po = po_doc2.to_dict()
+        if not pack_po:
             st.warning("PO not found — Customer Name and Item can be entered manually.")
 
     # Reset fields when order changes
