@@ -1932,17 +1932,17 @@ elif menu == "Process Inward":
 
             st.divider()
 
-            # Auto-filled sent details
+            # Auto-filled sent details (no key= so value= always reflects selected lot)
             ac1, ac2 = st.columns(2)
             with ac1:
-                st.text_input("Lot No",    value=selected_lot.get("LotNo", ""),          disabled=True, key="in_lot_no")
-                st.text_input("Order ID",  value=selected_lot.get("OrderId", ""),         disabled=True, key="in_order_id")
-                st.text_input("Customer",  value=selected_lot.get("Customer name", ""),   disabled=True, key="in_customer")
-                st.text_input("Colour",    value=selected_lot.get("Colour", ""),          disabled=True, key="in_colour")
-                st.text_input("Process",   value=selected_lot.get("Process", ""),         disabled=True, key="in_process")
+                st.text_input("Lot No",    value=selected_lot.get("LotNo", ""),          disabled=True)
+                st.text_input("Order ID",  value=selected_lot.get("OrderId", ""),         disabled=True)
+                st.text_input("Customer",  value=selected_lot.get("Customer name", ""),   disabled=True)
+                st.text_input("Colour",    value=selected_lot.get("Colour", ""),          disabled=True)
+                st.text_input("Process",   value=selected_lot.get("Process", ""),         disabled=True)
             with ac2:
-                st.text_input("Sent Roll", value=str(selected_lot.get("Roll", "")),       disabled=True, key="in_sent_roll")
-                st.text_input("Sent Qty",  value=str(selected_lot.get("Qnty", "")),       disabled=True, key="in_sent_qty")
+                st.text_input("Sent Roll", value=str(selected_lot.get("Roll", "")),       disabled=True)
+                st.text_input("Sent Qty",  value=str(selected_lot.get("Qnty", "")),       disabled=True)
 
                 recv_roll = st.number_input("Received Roll", min_value=0,   value=None, placeholder="0",    key="in_recv_roll")
                 recv_qty  = st.number_input("Received Qty",  min_value=0.0, value=None, placeholder="0.00", step=0.5, key="in_recv_qty")
@@ -1968,9 +1968,9 @@ elif menu == "Process Inward":
                     st.success("✅ Full quantity received — no shortage")
 
                 sc1, sc2 = st.columns(2)
-                sc1.text_input("Short Qty", value=str(short_qty), disabled=True, key="in_short_qty")
-                sc2.text_input("Short %",   value=f"{short_pct}%", disabled=True, key="in_short_pct")
-                st.text_input("Amount",     value=str(amount),    disabled=True, key="in_amount")
+                sc1.text_input("Short Qty", value=str(short_qty),  disabled=True)
+                sc2.text_input("Short %",   value=f"{short_pct}%", disabled=True)
+                st.text_input("Amount",     value=str(amount),     disabled=True)
 
             if st.button("➕ Add Lot to Challan", key="in_add_lot"):
                 existing = [l["LotNo"] for l in st.session_state.proc_in_lots]
