@@ -3914,6 +3914,7 @@ elif menu == "Edit PO":
                 e_fprice  = st.number_input("Fabric Price",    min_value=0, value=int(d.get("fabricprice") or 0),    key="epo_fprice")
                 e_aprice  = st.number_input("Accessory Price", min_value=0, value=int(d.get("accessoryprice") or 0), key="epo_aprice")
                 e_colours = st.text_area("Colours / Instructions", value=d.get("coloursinstructions",""),             key="epo_colours")
+                e_acc     = st.text_area("Accessory Description",  value=d.get("accessory",""),                       key="epo_acc")
                 e_custpo  = st.text_input("Customer PO No",         value=d.get("customerpono",""),                   key="epo_custpo")
 
             # ── Product image section ──
@@ -3960,6 +3961,7 @@ elif menu == "Edit PO":
                     "accessoryqnty":       e_aqty,
                     "accessoryprice":      e_aprice,
                     "coloursinstructions": e_colours,
+                    "accessory":           e_acc,
                     "customerpono":        e_custpo,
                 }
 
