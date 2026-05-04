@@ -1232,14 +1232,44 @@ elif menu == "Processor Master":
 elif menu == "PO":
     st.markdown('<div class="page-header"><h1>📄 PO Module</h1></div>', unsafe_allow_html=True)
 
-    if "new_order_id" not in st.session_state:
-        st.session_state.new_order_id = get_next_order_id()
+    import streamlit.components.v1 as _po_cv1
+    _po_cv1.html("""
+    <script>
+    (function() {
+        function getInputs() {
+            return Array.from(window.parent.document.querySelectorAll(
+                'input[type="text"]:not([disabled]), input[type="number"]:not([disabled])'
+            ));
+        }
+        function setupEnterNav() {
+            getInputs().forEach(function(inp) {
+                if (inp._enterBound) return;
+                inp._enterBound = true;
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    var inputs = getInputs();
+                    var idx = inputs.indexOf(inp);
+                    if (idx >= 0 && idx < inputs.length - 1) {
+                        inputs[idx + 1].focus();
+                        inputs[idx + 1].select();
+                    }
+                });
+            });
+        }
+        var obs = new MutationObserver(setupEnterNav);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setupEnterNav();
+    })();
+    </script>
+    """, height=0)
 
-    # Persist last save result so links/download survive re-runs
-    if "po_result" not in st.session_state:
-        st.session_state.po_result = None
+    if "new_order_id"    not in st.session_state: st.session_state.new_order_id    = get_next_order_id()
+    if "po_result"       not in st.session_state: st.session_state.po_result       = None
+    if "po_form_version" not in st.session_state: st.session_state.po_form_version = 0
 
     order_id = st.session_state.new_order_id
+    fv       = st.session_state.po_form_version   # bump after save to clear all fields
     st.success(f"Order ID: **{order_id}**")
 
     customers = get_customer_list()
@@ -1249,36 +1279,36 @@ elif menu == "PO":
 
     with col1:
         category = st.selectbox("Category", ["STRIPE", "PLAIN"],
-                                 index=None, placeholder="Select category...")
+                                 index=None, placeholder="Select category...", key=f"po_cat_{fv}")
 
         if customers:
             customer_name = st.selectbox("Customer", customers,
-                                          index=None, placeholder="Select customer...")
+                                          index=None, placeholder="Select customer...", key=f"po_cust_{fv}")
         else:
             st.warning("Add a customer first")
             customer_name = None
 
         if items:
             item = st.selectbox("Item", items,
-                                index=None, placeholder="Select item...")
+                                index=None, placeholder="Select item...", key=f"po_item_{fv}")
         else:
             st.warning("Add an item first")
             item = None
 
-        date_value     = st.date_input("Date", value=date.today(), format="DD/MM/YYYY")
+        date_value     = st.date_input("Date", value=date.today(), format="DD/MM/YYYY", key=f"po_date_{fv}")
         date_str       = date_value.strftime("%Y-%m-%d")
-        gsm            = st.number_input("GSM",          min_value=0, value=None, placeholder="0")
-        fabric_qnty    = st.number_input("Fabric Qty",   min_value=0, value=None, placeholder="0")
-        accessory_qnty = st.number_input("Accessory Qty",min_value=0, value=None, placeholder="0")
+        gsm            = st.number_input("GSM",          min_value=0, value=None, placeholder="0", key=f"po_gsm_{fv}")
+        fabric_qnty    = st.number_input("Fabric Qty",   min_value=0, value=None, placeholder="0", key=f"po_fqty_{fv}")
+        accessory_qnty = st.number_input("Accessory Qty",min_value=0, value=None, placeholder="0", key=f"po_aqty_{fv}")
 
     with col2:
-        fabric_price          = st.number_input("Fabric Price",    min_value=0, value=None, placeholder="0")
-        accessory_price       = st.number_input("Accessory Price", min_value=0, value=None, placeholder="0")
-        colours_instructions  = st.text_area("Colours Instructions")
-        accessory_desc        = st.text_area("Accessory Description", placeholder="e.g. 500 buttons, 200 labels...")
-        customer_po_no        = st.text_input("Customer PO No")
+        fabric_price          = st.number_input("Fabric Price",    min_value=0, value=None, placeholder="0",                          key=f"po_fprice_{fv}")
+        accessory_price       = st.number_input("Accessory Price", min_value=0, value=None, placeholder="0",                          key=f"po_aprice_{fv}")
+        colours_instructions  = st.text_area("Colours Instructions",                                                                   key=f"po_colours_{fv}")
+        accessory_desc        = st.text_area("Accessory Description", placeholder="e.g. 500 buttons, 200 labels...",                  key=f"po_acc_{fv}")
+        customer_po_no        = st.text_input("Customer PO No",                                                                        key=f"po_custpo_{fv}")
         uploaded_image        = st.file_uploader(
-            "Product Image", type=["jpg", "jpeg", "png", "webp"]
+            "Product Image", type=["jpg", "jpeg", "png", "webp"],                                                                      key=f"po_img_{fv}"
         )
 
     image_bytes = None
@@ -1346,7 +1376,8 @@ elif menu == "PO":
                 "pdf_url":   pdf_url,
                 "image_url": image_url,
             }
-            st.session_state.new_order_id = str(int(order_id) + 1)
+            st.session_state.new_order_id    = str(int(order_id) + 1)
+            st.session_state.po_form_version += 1
             st.rerun()
 
     # Show result card (persists across re-runs)
