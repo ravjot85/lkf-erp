@@ -870,8 +870,36 @@ if menu == "Dashboard":
                     {f'<div style="grid-column:span 2"><b>Accessory Details:</b> {po_d.get("accessory","")}</div>' if po_d.get('accessory') else ''}
                 </div>
                 """, unsafe_allow_html=True)
+                pdf_col1, pdf_col2 = st.columns([2, 2])
                 if po_d.get("pdf_url"):
-                    st.markdown(f"[📄 View PO PDF]({po_d['pdf_url']})")
+                    pdf_col1.markdown(f"[📄 View PO PDF]({po_d['pdf_url']})")
+                if pdf_col2.button("🔄 Regenerate PDF", key=f"regen_pdf_{sel_oid}"):
+                    with st.spinner("Regenerating PDF…"):
+                        try:
+                            # Get image bytes from Firebase URL or Drive
+                            _img_bytes = None
+                            _img_url   = po_d.get("image", "")
+                            _drive_id  = po_d.get("image_drive_id", "")
+                            if _img_url:
+                                import urllib.request as _ur2
+                                try:
+                                    with _ur2.urlopen(_img_url, timeout=10) as _r:
+                                        _img_bytes = _r.read()
+                                except Exception:
+                                    _img_bytes = None
+                            elif _drive_id:
+                                _img_bytes = _fetch_image_bytes(_drive_id)
+                            # Rebuild and upload PDF
+                            _pdf_bytes = build_po_pdf(po_d, _img_bytes)
+                            _new_url   = upload_to_firebase_storage(
+                                _pdf_bytes,
+                                f"po_pdfs/PO_{sel_oid}.pdf",
+                                "application/pdf",
+                            )
+                            db.collection("po").document(str(sel_oid)).update({"pdf_url": _new_url})
+                            st.success(f"PDF regenerated! [📄 Open PDF]({_new_url})")
+                        except Exception as _e:
+                            st.error(f"Error: {_e}")
 
     st.markdown("---")
 
