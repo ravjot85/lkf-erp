@@ -452,16 +452,59 @@ def _base_table_style() -> TableStyle:
 
 
 def _pdf_header(elements, styles, subtitle: str):
-    title_s = ParagraphStyle(
-        "t", parent=styles["Heading1"],
-        alignment=TA_CENTER, fontSize=16, spaceAfter=4,
+    _navy   = colors.HexColor("#1a3c6e")
+    _camel  = colors.HexColor("#C4956A")
+    _white  = colors.white
+
+    # Company name — white text on navy banner
+    co_s = ParagraphStyle(
+        "co", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=16,
+        alignment=TA_CENTER, textColor=_white,
+        spaceAfter=0, spaceBefore=0,
+    )
+    addr_s = ParagraphStyle(
+        "addr", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=8,
+        alignment=TA_CENTER, textColor=_white,
+        spaceAfter=0, spaceBefore=0,
     )
     sub_s = ParagraphStyle(
-        "s", parent=styles["Heading2"],
-        alignment=TA_CENTER, fontSize=13, spaceAfter=14,
+        "sub", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=12,
+        alignment=TA_CENTER, textColor=_white,
+        spaceAfter=0, spaceBefore=0,
     )
-    elements.append(Paragraph("LKF ERP", title_s))
-    elements.append(Paragraph(subtitle, sub_s))
+
+    # Navy banner — company name + address
+    banner = Table(
+        [[Paragraph("LOVELY KNITFAB PVT. LTD.", co_s)],
+         [Paragraph("HB No. 85, Vill. Kasabad, Ludhiana  |  GSTIN: 03AAECL9162H1Z1  |  Ph: 98766-82001", addr_s)]],
+        colWidths=[19*cm],
+    )
+    banner.setStyle(TableStyle([
+        ("BACKGROUND",  (0, 0), (-1, -1), _navy),
+        ("TOPPADDING",  (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",(0, 0), (-1, -1), 0),
+    ]))
+    elements.append(banner)
+
+    # Camel subtitle bar
+    sub_bar = Table(
+        [[Paragraph(subtitle, sub_s)]],
+        colWidths=[19*cm],
+    )
+    sub_bar.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _camel),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(sub_bar)
+    elements.append(Spacer(1, 0.4*cm))
 
 
 def _embed_image(elements, image_bytes: bytes, max_w=10, max_h=10):
