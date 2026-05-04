@@ -1021,6 +1021,47 @@ if menu == "Dashboard":
                 st.caption(f"Total Qty: **{int(tbl3['Qty'].sum()):,}**")
                 st.dataframe(tbl3, use_container_width=True, hide_index=True)
 
+    # ── Today's Dispatches Summary ──────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    today_str = date.today().strftime("%Y-%m-%d")
+    today_packs = [d.to_dict() for d in
+                   db.collection("PackingListRaw").where("Date", "==", today_str).stream()]
+
+    with st.expander(f"🚚 Today's Dispatches  ({len(today_packs)} packing slips)", expanded=True):
+        if not today_packs:
+            st.info("No dispatches recorded today.")
+        else:
+            # Group by OrderId — collect unique orders dispatched today
+            seen_orders = {}
+            for pk in today_packs:
+                oid = str(pk.get("OrderId", ""))
+                if oid and oid not in seen_orders:
+                    seen_orders[oid] = {
+                        "OrderId":   oid,
+                        "Customer":  pk.get("Customer name", "—"),
+                        "Item":      pk.get("Item", "—"),
+                        "Slips":     0,
+                    }
+                if oid:
+                    seen_orders[oid]["Slips"] += 1
+
+            disp_rows = sorted(seen_orders.values(), key=lambda r: r["OrderId"])
+            st.caption(f"**{len(disp_rows)} orders** dispatched today  •  **{len(today_packs)} packing slips**")
+
+            dc1, dc2, dc3, dc4 = st.columns([2, 3, 3, 1])
+            dc1.markdown("**Order ID**")
+            dc2.markdown("**Customer**")
+            dc3.markdown("**Item**")
+            dc4.markdown("**Slips**")
+            st.markdown('<hr style="margin:3px 0 8px">', unsafe_allow_html=True)
+
+            for row in disp_rows:
+                r1, r2, r3, r4 = st.columns([2, 3, 3, 1])
+                r1.markdown(f"**{row['OrderId']}**")
+                r2.markdown(row["Customer"])
+                r3.markdown(row["Item"])
+                r4.markdown(str(row["Slips"]))
+
 
 # ═════════════════════════════════════════════════════════
 #  CUSTOMER MASTER
