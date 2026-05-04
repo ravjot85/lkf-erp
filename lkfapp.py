@@ -547,7 +547,7 @@ def build_shoot_order_pdf(d: dict, image_bytes: bytes = None) -> bytes:
         elements.append(Paragraph(str(d["coloursinstructions"]), styles["Normal"]))
         elements.append(Spacer(1, 0.4*cm))
 
-    if d.get("accessory"):
+    if (d.get("accessory") or "").strip():
         elements.append(Paragraph("<b>Accessory Description:</b>", styles["Normal"]))
         elements.append(Paragraph(str(d["accessory"]), styles["Normal"]))
         elements.append(Spacer(1, 0.4*cm))
@@ -1418,7 +1418,7 @@ elif menu == "Shoot Order":
             "coloursinstructions": po_data.get("coloursinstructions", ""),
             "facricqnty":          po_data.get("facricqnty", ""),
             "accessoryqnty":       po_data.get("accessoryqnty", ""),
-            "accessory":           po_data.get("accessory", ""),
+            "accessory":           po_data.get("accessory") or "",
             "image":               po_data.get("image", ""),
             "image_drive_id":      po_data.get("image_drive_id", ""),
         }
