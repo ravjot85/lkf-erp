@@ -1400,9 +1400,10 @@ elif menu == "Shoot Order":
                 st.text_input("Category",       value=po_data.get("Category", ""),           disabled=True)
                 st.text_input("Fabric Qty",     value=str(po_data.get("facricqnty", "")),    disabled=True)
             with fc2:
-                st.text_input("GSM",            value=str(po_data.get("gsm", "")),           disabled=True)
-                st.text_input("Accessory Qty",  value=str(po_data.get("accessoryqnty", "")), disabled=True)
-                st.text_area("Colours",         value=po_data.get("coloursinstructions", ""), disabled=True)
+                st.text_input("GSM",                   value=str(po_data.get("gsm", "")),            disabled=True)
+                st.text_input("Accessory Qty",         value=str(po_data.get("accessoryqnty", "")),  disabled=True)
+                st.text_area("Colours",                value=po_data.get("coloursinstructions", ""),  disabled=True)
+                st.text_area("Accessory Description",  value=po_data.get("accessory", ""),            disabled=True)
         else:
             st.error("PO not found")
 
