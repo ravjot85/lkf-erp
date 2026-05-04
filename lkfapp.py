@@ -1743,23 +1743,18 @@ elif menu == "Process Out":
             elif po_lot_data is None:
                 st.error("PO not found for this Lot No")
             else:
-                # Check duplicate lot in current challan
-                existing_lots = [l["LotNo"] for l in st.session_state.proc_out_lots]
-                if lot_no_input.strip().upper() in existing_lots:
-                    st.error("This Lot No is already added to this challan")
-                else:
-                    st.session_state.proc_out_lots.append({
-                        "LotNo":         lot_no_input.strip().upper(),
-                        "OrderId":       derived_order_id,
-                        "Customer name": po_lot_data.get("Customer name", ""),
-                        "Item":          st.session_state.proc_out_item_val.strip(),
-                        "Colour":        colour.strip(),
-                        "Roll":          int(roll or 0),
-                        "Qnty":          float(qty or 0),
-                        "Process":       process.strip(),
-                        "DiaGsm":        dia_gsm.strip(),
-                    })
-                    st.rerun()
+                st.session_state.proc_out_lots.append({
+                    "LotNo":         lot_no_input.strip().upper(),
+                    "OrderId":       derived_order_id,
+                    "Customer name": po_lot_data.get("Customer name", ""),
+                    "Item":          st.session_state.proc_out_item_val.strip(),
+                    "Colour":        colour.strip(),
+                    "Roll":          int(roll or 0),
+                    "Qnty":          float(qty or 0),
+                    "Process":       process.strip(),
+                    "DiaGsm":        dia_gsm.strip(),
+                })
+                st.rerun()
 
         # ── Lots added so far ──
         if st.session_state.proc_out_lots:
