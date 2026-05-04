@@ -1809,7 +1809,6 @@ elif menu == "Process Out":
                     }
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_out_lots     = []
-                    st.session_state.proc_out_item_val = ""
                     st.session_state.proc_out_last_lot = ""
                     st.rerun()
         else:
