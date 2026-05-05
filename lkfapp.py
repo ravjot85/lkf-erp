@@ -4355,21 +4355,43 @@ elif menu == "Edit Process Out":
             for doc in po_lots:
                 lot    = doc.to_dict()
                 lot_no = lot.get("LotNo","")
+
+                # ── Per-lot session state init ──
+                if f"epo_ln_{doc.id}"       not in st.session_state:
+                    st.session_state[f"epo_ln_{doc.id}"]       = lot_no
+                if f"epo_ln_prev_{doc.id}"  not in st.session_state:
+                    st.session_state[f"epo_ln_prev_{doc.id}"]  = lot_no
+                if f"epo_oid_drv_{doc.id}"  not in st.session_state:
+                    st.session_state[f"epo_oid_drv_{doc.id}"]  = lot.get("OrderId","")
+                if f"epo_cust_drv_{doc.id}" not in st.session_state:
+                    st.session_state[f"epo_cust_drv_{doc.id}"] = lot.get("Customer name","")
+                if f"epo_it_{doc.id}"       not in st.session_state:
+                    st.session_state[f"epo_it_{doc.id}"]       = lot.get("Item","")
+
+                # ── Detect Lot No change and re-derive OrderId + Customer ──
+                current_ln = st.session_state[f"epo_ln_{doc.id}"]
+                if current_ln != st.session_state[f"epo_ln_prev_{doc.id}"]:
+                    new_oid = _epo_extract_oid(current_ln)
+                    st.session_state[f"epo_oid_drv_{doc.id}"]  = new_oid
+                    if new_oid:
+                        _po = db.collection("po").document(new_oid).get()
+                        st.session_state[f"epo_cust_drv_{doc.id}"] = (
+                            _po.to_dict().get("Customer name","") if _po.exists else "")
+                    else:
+                        st.session_state[f"epo_cust_drv_{doc.id}"] = ""
+                    st.session_state[f"epo_ln_prev_{doc.id}"] = current_ln
+
+                derived_oid  = st.session_state[f"epo_oid_drv_{doc.id}"]
+                derived_cust = st.session_state[f"epo_cust_drv_{doc.id}"]
+
                 with st.expander(f"Lot: {lot_no}  |  Order: {lot.get('OrderId','')}  |  {lot.get('Colour','')}",
                                  expanded=False):
                     lc1, lc2 = st.columns(2)
                     with lc1:
-                        # Initialise session state for Lot No on first render
-                        if f"epo_ln_{doc.id}" not in st.session_state:
-                            st.session_state[f"epo_ln_{doc.id}"] = lot_no
                         e_lot_no = st.text_input("Lot No", key=f"epo_ln_{doc.id}")
-                        # OrderId auto-derived from current Lot No value
-                        derived_oid = _epo_extract_oid(e_lot_no) if e_lot_no.strip() else lot.get("OrderId","")
-                        st.text_input("Order ID (auto)", value=derived_oid, disabled=True, key=f"epo_oi_{doc.id}")
-                        st.text_input("Customer", value=lot.get("Customer name",""), disabled=True, key=f"epo_cu_{doc.id}")
-                        # Initialise Item in session state
-                        if f"epo_it_{doc.id}" not in st.session_state:
-                            st.session_state[f"epo_it_{doc.id}"] = lot.get("Item","")
+                        # No key on disabled fields — value= controls display directly
+                        st.text_input("Order ID (auto)", value=derived_oid,  disabled=True)
+                        st.text_input("Customer",        value=derived_cust, disabled=True)
                         e_item = st.text_input("Item", key=f"epo_it_{doc.id}")
                     with lc2:
                         e_colour  = st.text_input("Colour",    value=lot.get("Colour",""),                       key=f"epo_col_{doc.id}")
