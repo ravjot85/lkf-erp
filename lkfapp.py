@@ -606,13 +606,25 @@ def build_shoot_order_pdf(d: dict, image_bytes: bytes = None) -> bytes:
 #  FIRESTORE HELPERS
 # ─────────────────────────────────────────────────────────
 def get_next_order_id() -> str:
-    max_id = 1000
-    for doc in db.collection("po").stream():
-        try:
-            max_id = max(max_id, int(doc.id))
-        except Exception:
-            pass
-    return str(max_id + 1)
+    """Return next PO Order ID using an atomic Firestore counter."""
+    counter_ref = db.collection("counters").document("po_order_id")
+
+    # Initialise counter on first ever call
+    if not counter_ref.get().exists:
+        max_id = max(
+            (int(d.id) for d in db.collection("po").stream() if d.id.isdigit()),
+            default=1000,
+        )
+        counter_ref.set({"last_id": max_id})
+
+    @firestore.transactional
+    def _increment(transaction, ref):
+        snap   = ref.get(transaction=transaction)
+        nid    = (snap.to_dict().get("last_id") or 1000) + 1
+        transaction.set(ref, {"last_id": nid})
+        return str(nid)
+
+    return _increment(db.transaction(), counter_ref)
 
 
 def get_customer_list():
