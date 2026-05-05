@@ -3091,7 +3091,7 @@ elif menu == "Reports":
                                 ParagraphStyle("kl", parent=normal, fontSize=9,
                                                textColor=colors.HexColor("#555555")))],
                      [Paragraph(str(count),
-                                ParagraphStyle("kv", parent=normal, fontSize=22,
+                                ParagraphStyle("kv", parent=normal, fontSize=14,
                                                fontName="Helvetica-Bold"))],
                      [Paragraph(f"Qty: {int(qty)} Kgs",
                                 ParagraphStyle("kq", parent=normal, fontSize=9))]],
@@ -3280,11 +3280,6 @@ elif menu == "Reports":
                     try:
                         pdf_bytes = build_customer_report_pdf(sel_cust, date_range_label, sections)
                         pdf_name  = f"CustomerReport_{sel_cust.replace(' ','_')}_{date_range_label.replace(' ','_')}.pdf"
-                        try:
-                            pdf_res = upload_to_drive(pdf_bytes, pdf_name, "application/pdf")
-                            st.markdown(f"[📄 Open Report in Drive]({pdf_res['url']})")
-                        except Exception:
-                            pass
                         st.download_button("⬇️ Download Report PDF", pdf_bytes, pdf_name,
                                            "application/pdf", key="cr_dl")
                     except Exception as e:
