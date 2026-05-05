@@ -298,7 +298,6 @@ _REPORTS = [
     "📦 Pending by Item",
     "🔄 Processing Report",
     "📦 Part Dispatched",
-    "🖨️ Print Packing List",
 ]
 _MASTERS = [
     ("👥", "Customer Master"),
@@ -2468,7 +2467,9 @@ elif menu == "Packing":
         doc.build(elements)
         return buf.getvalue()
 
-    # ── Session state ──
+    tab_form, tab_print = st.tabs(["📝 New Packing List", "🖨️ Print Packing List"])
+
+    # ── Session state (shared across both tabs) ──
     if "pack_fabric_rows"    not in st.session_state: st.session_state.pack_fabric_rows    = [{"id": 0, "wc": 12}]
     if "pack_fabric_nid"     not in st.session_state: st.session_state.pack_fabric_nid     = 1
     if "pack_acc_rows"       not in st.session_state: st.session_state.pack_acc_rows       = [{"id": 0, "wc": 12}]
@@ -2487,223 +2488,342 @@ elif menu == "Packing":
         st.session_state.pack_result      = None
         st.session_state.pack_last_oid    = ""
 
-    # ── Order ID + auto-fetch ──
-    oc1, oc2, oc3 = st.columns([1.5, 2, 2])
-    with oc1:
-        order_id_in = st.text_input("Order ID", key="pack_oid")
+    with tab_form:
+        # ── Order ID + auto-fetch ──
+        oc1, oc2, oc3 = st.columns([1.5, 2, 2])
+        with oc1:
+            order_id_in = st.text_input("Order ID", key="pack_oid")
 
-    pack_po = None
-    if order_id_in.strip():
-        import re as _re_pack_oid
-        oid_clean = order_id_in.strip()
-        po_doc = db.collection("po").document(oid_clean).get()
-        if po_doc.exists:
-            pack_po = po_doc.to_dict()
-        else:
-            # For suffixed IDs like "1750A", fall back to base numeric "1750"
-            _m = _re_pack_oid.match(r'^(\d+)', oid_clean)
-            _base = _m.group(1) if _m else None
-            if _base and _base != oid_clean:
-                po_doc2 = db.collection("po").document(_base).get()
-                if po_doc2.exists:
-                    pack_po = po_doc2.to_dict()
-        if not pack_po:
-            st.warning("PO not found — Customer Name and Item can be entered manually.")
+        pack_po = None
+        if order_id_in.strip():
+            import re as _re_pack_oid
+            oid_clean = order_id_in.strip()
+            po_doc = db.collection("po").document(oid_clean).get()
+            if po_doc.exists:
+                pack_po = po_doc.to_dict()
+            else:
+                # For suffixed IDs like "1750A", fall back to base numeric "1750"
+                _m = _re_pack_oid.match(r'^(\d+)', oid_clean)
+                _base = _m.group(1) if _m else None
+                if _base and _base != oid_clean:
+                    po_doc2 = db.collection("po").document(_base).get()
+                    if po_doc2.exists:
+                        pack_po = po_doc2.to_dict()
+            if not pack_po:
+                st.warning("PO not found — Customer Name and Item can be entered manually.")
 
-    # Reset fields when order changes
-    if order_id_in.strip() != st.session_state.pack_last_oid:
-        st.session_state.pack_last_oid    = order_id_in.strip()
-        st.session_state.pack_item_edit   = pack_po.get("Item", "")         if pack_po else ""
-        st.session_state.pack_cust_manual = pack_po.get("Customer name", "") if pack_po else ""
-    if "pack_item_edit"   not in st.session_state: st.session_state.pack_item_edit   = ""
-    if "pack_cust_manual" not in st.session_state: st.session_state.pack_cust_manual = ""
+        # Reset fields when order changes
+        if order_id_in.strip() != st.session_state.pack_last_oid:
+            st.session_state.pack_last_oid    = order_id_in.strip()
+            st.session_state.pack_item_edit   = pack_po.get("Item", "")         if pack_po else ""
+            st.session_state.pack_cust_manual = pack_po.get("Customer name", "") if pack_po else ""
+        if "pack_item_edit"   not in st.session_state: st.session_state.pack_item_edit   = ""
+        if "pack_cust_manual" not in st.session_state: st.session_state.pack_cust_manual = ""
 
-    with oc2:
-        # Editable if PO not found, auto-filled + locked if PO exists
-        if pack_po:
-            st.text_input("Customer Name",
-                          value=pack_po.get("Customer name", ""),
-                          disabled=True)
-            pack_customer = pack_po.get("Customer name", "")
-        else:
-            pack_customer = st.text_input("Customer Name (manual)", key="pack_cust_manual")
-    with oc3:
-        pack_item = st.text_input("Item (editable)", key="pack_item_edit")
+        with oc2:
+            # Editable if PO not found, auto-filled + locked if PO exists
+            if pack_po:
+                st.text_input("Customer Name",
+                              value=pack_po.get("Customer name", ""),
+                              disabled=True)
+                pack_customer = pack_po.get("Customer name", "")
+            else:
+                pack_customer = st.text_input("Customer Name (manual)", key="pack_cust_manual")
+        with oc3:
+            pack_item = st.text_input("Item (editable)", key="pack_item_edit")
 
-    st.caption("Customer and item auto-fetch if Order ID exists in PO. If not, enter manually.")
-    st.divider()
+        st.caption("Customer and item auto-fetch if Order ID exists in PO. If not, enter manually.")
+        st.divider()
 
-    # ── Colour section renderer ──
-    def render_section(rows_key, nid_key, prefix, section_label):
-        st.markdown(f"**{section_label}**")
-        st.caption("One colour row can have unlimited weights. Click ＋ to add more weight boxes.")
+        # ── Colour section renderer ──
+        def render_section(rows_key, nid_key, prefix, section_label):
+            st.markdown(f"**{section_label}**")
+            st.caption("One colour row can have unlimited weights. Click ＋ to add more weight boxes.")
 
-        WROW = 4   # max weight inputs per row
-        rows = st.session_state[rows_key]
-        for row in list(rows):
-            rid      = row["id"]
-            wc       = row["wc"]
-            indices  = list(range(wc))
-            sub_rows = [indices[i:i+WROW] for i in range(0, max(len(indices),1), WROW)]
-            if not sub_rows:
-                sub_rows = [[]]
+            WROW = 4   # max weight inputs per row
+            rows = st.session_state[rows_key]
+            for row in list(rows):
+                rid      = row["id"]
+                wc       = row["wc"]
+                indices  = list(range(wc))
+                sub_rows = [indices[i:i+WROW] for i in range(0, max(len(indices),1), WROW)]
+                if not sub_rows:
+                    sub_rows = [[]]
 
-            for sr_idx, sr in enumerate(sub_rows):
-                n = len(sr)
-                if sr_idx == 0:
-                    # First sub-row: Colour | weights | Delete
-                    cols = st.columns([2.5] + [1]*n + [0.5])
-                    with cols[0]:
-                        st.text_input("Colour", placeholder="e.g. RED",
-                                      key=f"{prefix}_colour_{rid}", label_visibility="collapsed")
-                    for k, j in enumerate(sr):
-                        with cols[k+1]:
-                            st.text_input(f"w{j}", placeholder="Wt",
-                                          key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
-                    with cols[-1]:
-                        if st.button("🗑", key=f"{prefix}_rm_{rid}", help="Remove colour row"):
-                            st.session_state[rows_key] = [r for r in rows if r["id"] != rid]
-                            st.rerun()
-                else:
-                    # Continuation sub-rows: blank | weights | blank
-                    cols = st.columns([2.5] + [1]*n + [0.5])
-                    for k, j in enumerate(sr):
-                        with cols[k+1]:
-                            st.text_input(f"w{j}", placeholder="Wt",
-                                          key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
+                for sr_idx, sr in enumerate(sub_rows):
+                    n = len(sr)
+                    if sr_idx == 0:
+                        # First sub-row: Colour | weights | Delete
+                        cols = st.columns([2.5] + [1]*n + [0.5])
+                        with cols[0]:
+                            st.text_input("Colour", placeholder="e.g. RED",
+                                          key=f"{prefix}_colour_{rid}", label_visibility="collapsed")
+                        for k, j in enumerate(sr):
+                            with cols[k+1]:
+                                st.text_input(f"w{j}", placeholder="Wt",
+                                              key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
+                        with cols[-1]:
+                            if st.button("🗑", key=f"{prefix}_rm_{rid}", help="Remove colour row"):
+                                st.session_state[rows_key] = [r for r in rows if r["id"] != rid]
+                                st.rerun()
+                    else:
+                        # Continuation sub-rows: blank | weights | blank
+                        cols = st.columns([2.5] + [1]*n + [0.5])
+                        for k, j in enumerate(sr):
+                            with cols[k+1]:
+                                st.text_input(f"w{j}", placeholder="Wt",
+                                              key=f"{prefix}_w_{rid}_{j}", label_visibility="collapsed")
 
-            # Add weight button below colour block
-            if st.button("＋ Weight", key=f"{prefix}_aw_{rid}", help="Add weight box"):
-                row["wc"] += 1
+                # Add weight button below colour block
+                if st.button("＋ Weight", key=f"{prefix}_aw_{rid}", help="Add weight box"):
+                    row["wc"] += 1
+                    st.rerun()
+
+                st.markdown("---")
+
+            if st.button(f"＋ Add {section_label.split()[0]} Row", key=f"{prefix}_addrow"):
+                nid = st.session_state[nid_key]
+                st.session_state[nid_key] += 1
+                st.session_state[rows_key].append({"id": nid, "wc": 12})
                 st.rerun()
 
-            st.markdown("---")
+            # Live output preview
+            lines = []
+            for row in st.session_state[rows_key]:
+                rid    = row["id"]
+                colour = st.session_state.get(f"{prefix}_colour_{rid}", "").strip().upper()
+                ws     = [st.session_state.get(f"{prefix}_w_{rid}_{j}", "").strip()
+                          for j in range(row["wc"])]
+                ws = [w for w in ws if w]
+                if colour and ws:
+                    lines.append(f"{colour}: {','.join(ws)}")
 
-        if st.button(f"＋ Add {section_label.split()[0]} Row", key=f"{prefix}_addrow"):
-            nid = st.session_state[nid_key]
-            st.session_state[nid_key] += 1
-            st.session_state[rows_key].append({"id": nid, "wc": 12})
-            st.rerun()
+            st.markdown(f"**{section_label.split()[0]} Output Preview**")
+            st.text_area(f"{prefix}_output_preview", value="\n".join(lines), disabled=True,
+                         height=90, label_visibility="collapsed")
+            return lines
 
-        # Live output preview
-        lines = []
-        for row in st.session_state[rows_key]:
-            rid    = row["id"]
-            colour = st.session_state.get(f"{prefix}_colour_{rid}", "").strip().upper()
-            ws     = [st.session_state.get(f"{prefix}_w_{rid}_{j}", "").strip()
-                      for j in range(row["wc"])]
-            ws = [w for w in ws if w]
-            if colour and ws:
-                lines.append(f"{colour}: {','.join(ws)}")
+        fc, ac = st.columns(2)
+        with fc:
+            f_lines = render_section("pack_fabric_rows", "pack_fabric_nid", "fc", "Fabric Colour Weights")
+        with ac:
+            a_lines = render_section("pack_acc_rows",    "pack_acc_nid",    "ac", "Accessory Colour Weights")
 
-        st.markdown(f"**{section_label.split()[0]} Output Preview**")
-        st.text_area(f"{prefix}_output_preview", value="\n".join(lines), disabled=True,
-                     height=90, label_visibility="collapsed")
-        return lines
+        st.divider()
 
-    fc, ac = st.columns(2)
-    with fc:
-        f_lines = render_section("pack_fabric_rows", "pack_fabric_nid", "fc", "Fabric Colour Weights")
-    with ac:
-        a_lines = render_section("pack_acc_rows",    "pack_acc_nid",    "ac", "Accessory Colour Weights")
+        # ── Submit / Clear ──
+        sb1, sb2, _ = st.columns([1, 1, 5])
+        with sb1:
+            submit = st.button("Submit", type="primary")
+        with sb2:
+            st.button("Clear", on_click=_clear_packing)
 
-    st.divider()
+        if submit:
+            if not order_id_in.strip():
+                st.error("Enter an Order ID")
+            elif not f_lines and not a_lines:
+                st.error("Enter at least one colour with weights")
+            else:
+                raw_id        = get_next_pack_id()
+                pack_date_str = date.today().strftime("%Y-%m-%d")
+                data = {
+                    "RawId":            raw_id,
+                    "Date":             pack_date_str,
+                    "OrderId":          order_id_in.strip(),
+                    "Customer name":    pack_customer.strip().upper(),
+                    "Item":             pack_item,
+                    "FabricDetails":    "\n".join(f_lines),
+                    "AccessoryDetails": "\n".join(a_lines),
+                }
+                pdf_url   = ""
+                pdf_bytes = None
+                pdf_name  = f"PackingList_{order_id_in.strip()}_{raw_id}.pdf"
 
-    # ── Submit / Clear ──
-    sb1, sb2, _ = st.columns([1, 1, 5])
-    with sb1:
-        submit = st.button("Submit", type="primary")
-    with sb2:
-        st.button("Clear", on_click=_clear_packing)
+                with st.spinner("Saving..."):
+                    # Save new entry first
+                    db.collection("PackingListRaw").document(raw_id).set(data)
 
-    if submit:
-        if not order_id_in.strip():
-            st.error("Enter an Order ID")
-        elif not f_lines and not a_lines:
-            st.error("Enter at least one colour with weights")
-        else:
-            raw_id        = get_next_pack_id()
-            pack_date_str = date.today().strftime("%Y-%m-%d")
-            data = {
-                "RawId":            raw_id,
-                "Date":             pack_date_str,
-                "OrderId":          order_id_in.strip(),
-                "Customer name":    pack_customer.strip().upper(),
-                "Item":             pack_item,
-                "FabricDetails":    "\n".join(f_lines),
-                "AccessoryDetails": "\n".join(a_lines),
-            }
-            pdf_url   = ""
-            pdf_bytes = None
-            pdf_name  = f"PackingList_{order_id_in.strip()}_{raw_id}.pdf"
+                    # Fetch ALL entries for this OrderId (including the one just saved)
+                    # and merge FabricDetails + AccessoryDetails by colour
+                    all_slips = [
+                        d.to_dict() for d in
+                        db.collection("PackingListRaw")
+                        .where("OrderId", "==", order_id_in.strip())
+                        .stream()
+                    ]
 
-            with st.spinner("Saving..."):
-                # Save new entry first
-                db.collection("PackingListRaw").document(raw_id).set(data)
+                    def _merge_lines(slips, field):
+                        colour_weights = {}
+                        for slip in slips:
+                            for line in slip.get(field, "").splitlines():
+                                if ":" not in line:
+                                    continue
+                                colour, wstr = line.split(":", 1)
+                                colour = colour.strip().upper()
+                                weights = [w.strip() for w in wstr.split(",") if w.strip()]
+                                if colour not in colour_weights:
+                                    colour_weights[colour] = []
+                                colour_weights[colour].extend(weights)
+                        return [f"{c}: {','.join(ws)}" for c, ws in colour_weights.items()]
 
-                # Fetch ALL entries for this OrderId (including the one just saved)
-                # and merge FabricDetails + AccessoryDetails by colour
-                all_slips = [
-                    d.to_dict() for d in
-                    db.collection("PackingListRaw")
-                    .where("OrderId", "==", order_id_in.strip())
-                    .stream()
-                ]
+                    merged_f = _merge_lines(all_slips, "FabricDetails")
+                    merged_a = _merge_lines(all_slips, "AccessoryDetails")
+                    slip_count = len(all_slips)
 
-                def _merge_lines(slips, field):
-                    colour_weights = {}
-                    for slip in slips:
-                        for line in slip.get(field, "").splitlines():
-                            if ":" not in line:
-                                continue
-                            colour, wstr = line.split(":", 1)
-                            colour = colour.strip().upper()
-                            weights = [w.strip() for w in wstr.split(",") if w.strip()]
-                            if colour not in colour_weights:
-                                colour_weights[colour] = []
-                            colour_weights[colour].extend(weights)
-                    return [f"{c}: {','.join(ws)}" for c, ws in colour_weights.items()]
-
-                merged_f = _merge_lines(all_slips, "FabricDetails")
-                merged_a = _merge_lines(all_slips, "AccessoryDetails")
-                slip_count = len(all_slips)
-
-                try:
-                    pdf_bytes = build_packing_pdf(data, merged_f, merged_a)
-                    pdf_name  = f"PackingList_{order_id_in.strip()}.pdf"
-                    pdf_res   = upload_to_firebase_storage(
-                        pdf_bytes,
-                        f"packing_pdfs/PackingList_{order_id_in.strip()}.pdf",
-                        "application/pdf",
-                    )
-                    pdf_url = pdf_res
-                    # Update all slips for this OrderId with the merged pdf_url
-                    for slip in all_slips:
-                        db.collection("PackingListRaw").document(slip["RawId"]).update({"pdf_url": pdf_url})
-                except Exception as e:
-                    st.warning(f"PDF error: {e}")
-                    if pdf_bytes is None:
+                    try:
                         pdf_bytes = build_packing_pdf(data, merged_f, merged_a)
+                        pdf_name  = f"PackingList_{order_id_in.strip()}.pdf"
+                        pdf_res   = upload_to_firebase_storage(
+                            pdf_bytes,
+                            f"packing_pdfs/PackingList_{order_id_in.strip()}.pdf",
+                            "application/pdf",
+                        )
+                        pdf_url = pdf_res
+                        # Update all slips for this OrderId with the merged pdf_url
+                        for slip in all_slips:
+                            db.collection("PackingListRaw").document(slip["RawId"]).update({"pdf_url": pdf_url})
+                    except Exception as e:
+                        st.warning(f"PDF error: {e}")
+                        if pdf_bytes is None:
+                            pdf_bytes = build_packing_pdf(data, merged_f, merged_a)
 
-                if slip_count > 1:
-                    st.info(f"ℹ️ PDF merged across {slip_count} packing slips for Order {order_id_in.strip()}")
+                    if slip_count > 1:
+                        st.info(f"ℹ️ PDF merged across {slip_count} packing slips for Order {order_id_in.strip()}")
 
-            st.session_state.pack_result = {
-                "raw_id": raw_id, "pdf_bytes": pdf_bytes,
-                "pdf_url": pdf_url, "pdf_name": pdf_name,
-            }
-            st.rerun()
+                st.session_state.pack_result = {
+                    "raw_id": raw_id, "pdf_bytes": pdf_bytes,
+                    "pdf_url": pdf_url, "pdf_name": pdf_name,
+                }
+                st.rerun()
 
-    if st.session_state.pack_result:
-        res = st.session_state.pack_result
-        st.success(f"✅ Packing List **{res['raw_id']}** saved!")
-        pc1, pc2 = st.columns(2)
-        if res.get("pdf_url"):
-            pc1.markdown(f"[📄 Open Packing List in Drive]({res['pdf_url']})")
-        if res.get("pdf_bytes"):
-            pc2.download_button("⬇️ Download Packing List PDF",
-                                res["pdf_bytes"], res["pdf_name"],
-                                "application/pdf", key="pack_dl")
+        if st.session_state.pack_result:
+            res = st.session_state.pack_result
+            st.success(f"✅ Packing List **{res['raw_id']}** saved!")
+            pc1, pc2 = st.columns(2)
+            if res.get("pdf_url"):
+                pc1.markdown(f"[📄 Open Packing List in Drive]({res['pdf_url']})")
+            if res.get("pdf_bytes"):
+                pc2.download_button("⬇️ Download Packing List PDF",
+                                    res["pdf_bytes"], res["pdf_name"],
+                                    "application/pdf", key="pack_dl")
+
+    with tab_print:
+        import streamlit.components.v1 as _plcomps
+        from datetime import datetime as _pldt
+
+        pl_oid = st.text_input("Enter Order ID", key="pl_print_oid", placeholder="e.g. 1001")
+
+        if pl_oid.strip():
+            pl_docs = list(db.collection("PackingListRaw")
+                           .where("OrderId", "==", pl_oid.strip()).stream())
+            if not pl_docs:
+                st.error("No packing list found for this Order ID")
+            else:
+                pl_data = pl_docs[0].to_dict()
+
+                def _parse_pack_line(line):
+                    if ":" not in line: return None
+                    colour, wstr = line.split(":", 1)
+                    ws = [w.strip() for w in wstr.split(",") if w.strip()]
+                    try: total = round(sum(float(w) for w in ws), 2)
+                    except Exception: total = 0.0
+                    return {"colour": colour.strip(), "weights": ws, "rolls": len(ws), "total": total}
+
+                def _section_rows_html(lines):
+                    if not lines:
+                        return "<tr><td colspan='4' style='text-align:center;color:#999;'>No data</td></tr>"
+                    rows = ""
+                    for line in lines:
+                        p = _parse_pack_line(line)
+                        if not p: continue
+                        wt_str = ", ".join(f"{w} Kg" for w in p["weights"])
+                        rows += (f"<tr><td><b>{p['colour']}</b></td>"
+                                 f"<td style='text-align:center'>{p['rolls']}</td>"
+                                 f"<td style='text-align:right'>{p['total']}</td>"
+                                 f"<td>{wt_str}</td></tr>")
+                    return rows
+
+                f_lines = [l for l in pl_data.get("FabricDetails","").splitlines()  if l.strip()]
+                a_lines = [l for l in pl_data.get("AccessoryDetails","").splitlines() if l.strip()]
+                f_parsed = [p for l in f_lines for p in [_parse_pack_line(l)] if p]
+                a_parsed = [p for l in a_lines for p in [_parse_pack_line(l)] if p]
+                f_total_wt = round(sum(p["total"] for p in f_parsed), 2)
+                f_total_rolls = sum(p["rolls"] for p in f_parsed)
+                a_total_wt = round(sum(p["total"] for p in a_parsed), 2)
+                a_total_rolls = sum(p["rolls"] for p in a_parsed)
+                grand_wt = round(f_total_wt + a_total_wt, 2)
+                grand_rolls = f_total_rolls + a_total_rolls
+
+                raw_date = pl_data.get("Date","")
+                try: disp_date = _pldt.strptime(raw_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+                except Exception: disp_date = raw_date
+
+                html = f"""
+                <style>
+                  @media print {{ .no-print {{ display: none !important; }} body {{ margin: 0; }} }}
+                  .pl-wrap {{ font-family: Arial, sans-serif; font-size: 13px; max-width: 900px; padding: 20px; color: #222; }}
+                  .pl-header {{ display: flex; justify-content: space-between; align-items: flex-start;
+                    margin-bottom: 20px; border-bottom: 2px solid #C4956A; padding-bottom: 12px; }}
+                  .pl-title {{ font-size: 22px; font-weight: 700; margin: 0; }}
+                  .pl-company {{ color: #888; margin: 3px 0 0; font-size: 13px; }}
+                  .pl-meta td {{ padding: 2px 6px; font-size: 13px; }}
+                  .pl-meta td:first-child {{ font-weight: 700; color: #555; }}
+                  .pl-section {{ margin-top: 18px; }}
+                  .pl-section h4 {{ font-size: 14px; margin: 0 0 6px; border-bottom: 1px solid #ddd;
+                    padding-bottom: 4px; color: #5C3410; }}
+                  .pl-table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
+                  .pl-table th {{ background: #f0f0f0; border: 1px solid #ccc; padding: 6px 8px; text-align: left; }}
+                  .pl-table td {{ border: 1px solid #ddd; padding: 5px 8px; vertical-align: top; }}
+                  .pl-table tr:nth-child(even) td {{ background: #fafafa; }}
+                  .pl-summary {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 20px; }}
+                  .pl-sum-box {{ border: 1px solid #ddd; border-radius: 6px; padding: 10px 14px; }}
+                  .pl-sum-label {{ font-size: 11px; color: #888; margin: 0 0 4px; }}
+                  .pl-sum-val {{ font-size: 18px; font-weight: 700; margin: 0; }}
+                  .pl-sum-sub {{ font-size: 12px; color: #666; margin: 2px 0 0; }}
+                  .print-btn {{ background: #C4956A; color: white; border: none; padding: 10px 28px;
+                    font-size: 14px; border-radius: 8px; cursor: pointer; margin-bottom: 16px; font-weight: 600; }}
+                  .print-btn:hover {{ background: #A07848; }}
+                </style>
+                <script>
+                function printPackingList() {{
+                    var content = document.getElementById('pl-content').outerHTML;
+                    var style   = document.querySelector('style').outerHTML;
+                    var win = window.open('', '_blank', 'width=960,height=800');
+                    win.document.write('<html><head><title>Packing List</title>' + style + '</head>' +
+                        '<body style="margin:20px;font-family:Arial,sans-serif;">' + content + '</body></html>');
+                    win.document.close(); win.focus();
+                    setTimeout(function() {{ win.print(); win.close(); }}, 400);
+                }}
+                </script>
+                <button class="print-btn" onclick="printPackingList()">🖨️ Print</button>
+                <div class="pl-wrap" id="pl-content">
+                  <div class="pl-header">
+                    <div><p class="pl-title">Packing List</p><p class="pl-company">{COMPANY_NAME}</p></div>
+                    <table class="pl-meta">
+                      <tr><td>OrderID:</td><td><b>{pl_data.get('OrderId','')}</b></td></tr>
+                      <tr><td>Date:</td><td><b>{disp_date}</b></td></tr>
+                      <tr><td>Customer:</td><td><b>{pl_data.get('Customer name','')}</b></td></tr>
+                      <tr><td>Item:</td><td><b>{pl_data.get('Item','')}</b></td></tr>
+                    </table>
+                  </div>
+                  <div class="pl-section"><h4>Fabric</h4>
+                    <table class="pl-table"><thead><tr>
+                      <th>Colour</th><th>Rolls</th><th>Total Wt</th><th>Roll Weights</th>
+                    </tr></thead><tbody>{_section_rows_html(f_lines)}</tbody></table></div>
+                  <div class="pl-section"><h4>Accessory</h4>
+                    <table class="pl-table"><thead><tr>
+                      <th>Colour</th><th>Rolls</th><th>Total Wt</th><th>Roll Weights</th>
+                    </tr></thead><tbody>{_section_rows_html(a_lines)}</tbody></table></div>
+                  <div class="pl-summary">
+                    <div class="pl-sum-box"><p class="pl-sum-label">Fabric Total</p>
+                      <p class="pl-sum-val">{f_total_wt} kg</p><p class="pl-sum-sub">Rolls: {f_total_rolls}</p></div>
+                    <div class="pl-sum-box"><p class="pl-sum-label">Accessory Total</p>
+                      <p class="pl-sum-val">{a_total_wt} kg</p><p class="pl-sum-sub">Rolls: {a_total_rolls}</p></div>
+                    <div class="pl-sum-box"><p class="pl-sum-label">Grand Total</p>
+                      <p class="pl-sum-val">{grand_wt} kg</p><p class="pl-sum-sub">Rolls: {grand_rolls}</p></div>
+                  </div>
+                </div>"""
+                _plcomps.html(html, height=900, scrolling=True)
 
 elif menu == "Cancel Order":
     st.markdown('<div class="page-header"><h1>❌ Cancel Order</h1></div>', unsafe_allow_html=True)
@@ -3747,11 +3867,8 @@ elif menu == "Reports":
             sc1.metric("Fabric not fully dispatched", len(fab_short))
             sc2.metric("Accessory not fully dispatched", len(acc_short))
 
-     elif rpt_type == "🖨️ Print Packing List":
-        import streamlit.components.v1 as _plcomps
-        from datetime import datetime as _pldt
-
-        st.markdown("### 🖨️ Print Packing List")
+     elif rpt_type == "__removed__":
+        pass  # Print Packing List moved to Packing form tab
         pl_oid = st.text_input("Enter Order ID", key="pl_print_oid", placeholder="e.g. 1001")
 
         if pl_oid.strip():
