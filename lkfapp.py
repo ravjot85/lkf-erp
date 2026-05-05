@@ -1319,13 +1319,11 @@ elif menu == "PO":
     </script>
     """, height=0)
 
-    if "new_order_id"    not in st.session_state: st.session_state.new_order_id    = get_next_order_id()
     if "po_result"       not in st.session_state: st.session_state.po_result       = None
     if "po_form_version" not in st.session_state: st.session_state.po_form_version = 0
 
-    order_id = st.session_state.new_order_id
-    fv       = st.session_state.po_form_version   # bump after save to clear all fields
-    st.success(f"Order ID: **{order_id}**")
+    fv = st.session_state.po_form_version   # bump after save to clear all fields
+    st.info("Order ID will be assigned automatically when you click **Save PO**.")
 
     customers = get_customer_list()
     items     = get_item_list()
@@ -1375,6 +1373,8 @@ elif menu == "PO":
         if not category or not customer_name or not item:
             st.error("Please select Category, Customer and Item")
         else:
+            # Assign OrderId atomically at submit — never pre-assigned
+            order_id       = get_next_order_id()
             image_drive_id = ""
             image_url      = ""
             pdf_url        = ""
@@ -1431,7 +1431,6 @@ elif menu == "PO":
                 "pdf_url":   pdf_url,
                 "image_url": image_url,
             }
-            st.session_state.new_order_id    = str(int(order_id) + 1)
             st.session_state.po_form_version += 1
             st.rerun()
 
