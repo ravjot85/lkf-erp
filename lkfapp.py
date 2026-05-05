@@ -1511,7 +1511,7 @@ elif menu == "Shoot Order":
 
         pdf_url   = ""
         pdf_bytes = None
-        pdf_name  = f"ShootOrder_{order_id_input.strip()}_{shoot_date_str}.pdf"
+        pdf_name  = f"ShootOrder_{order_id_input.strip()}.pdf"
 
         with st.spinner("Generating Shoot Order PDF..."):
             # Step 1: fetch image — Drive ID takes priority, then Firebase Storage URL
