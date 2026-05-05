@@ -4064,6 +4064,22 @@ elif menu == "Edit PO":
                 db.collection("po").document(search_id.strip()).update(update_data)
                 st.success(f"✅ PO {search_id} updated successfully")
 
+            # ── Delete PO ──
+            st.divider()
+            st.markdown("#### 🗑️ Delete PO")
+            confirm_del = st.checkbox(
+                f"I confirm I want to permanently delete PO **{search_id.strip()}**",
+                key="epo_del_confirm"
+            )
+            if st.button("🗑️ Delete PO", type="secondary", key="epo_del_btn", disabled=not confirm_del):
+                with st.spinner("Deleting..."):
+                    try:
+                        db.collection("po").document(search_id.strip()).delete()
+                        st.success(f"✅ PO **{search_id.strip()}** deleted successfully.")
+                        st.session_state.pop("epo_del_confirm", None)
+                    except Exception as _de:
+                        st.error(f"Delete failed: {_de}")
+
 
 # ═════════════════════════════════════════════════════════
 #  EDIT PACKING LIST
