@@ -1755,6 +1755,7 @@ elif menu == "Process Out":
     if "proc_out_challan_no" not in st.session_state: st.session_state.proc_out_challan_no = get_next_proc_out_challan_no()
     if "proc_out_lots"     not in st.session_state: st.session_state.proc_out_lots     = []
     if "proc_out_item_val" not in st.session_state: st.session_state.proc_out_item_val = ""
+    if "proc_out_cust_val" not in st.session_state: st.session_state.proc_out_cust_val = ""
     if "proc_out_last_lot" not in st.session_state: st.session_state.proc_out_last_lot = ""
 
     tab_add, tab_view, tab_print = st.tabs(["Add Challan", "View Records", "🖨️ Print Challan"])
@@ -1801,13 +1802,14 @@ elif menu == "Process Out":
                     st.error("Cannot derive Order ID from Lot No")
 
             st.text_input("Order ID", value=derived_order_id, disabled=True, key="oid_derived")
-            st.text_input("Customer", value=po_lot_data.get("Customer name", "") if po_lot_data else "", disabled=True, key="cust_derived")
 
-            # Auto-fill Item when Lot No changes, but keep it editable
+            # Auto-fill Customer & Item when Lot No changes, both stay editable
             if lot_no_input.strip() != st.session_state.proc_out_last_lot:
                 st.session_state.proc_out_last_lot = lot_no_input.strip()
-                st.session_state.proc_out_item_val = po_lot_data.get("Item", "") if po_lot_data else ""
-            st.text_input("Item", key="proc_out_item_val")
+                st.session_state.proc_out_cust_val = po_lot_data.get("Customer name", "") if po_lot_data else ""
+                st.session_state.proc_out_item_val = po_lot_data.get("Item", "")          if po_lot_data else ""
+            st.text_input("Customer", key="proc_out_cust_val")
+            st.text_input("Item",     key="proc_out_item_val")
 
         with lc2:
             colour  = st.text_input("Colour",                key="lot_colour")
@@ -1819,13 +1821,11 @@ elif menu == "Process Out":
         if st.button("➕ Add Lot to Challan"):
             if not lot_no_input.strip() or not derived_order_id:
                 st.error("Enter a valid Lot No")
-            elif po_lot_data is None:
-                st.error("PO not found for this Lot No")
             else:
                 st.session_state.proc_out_lots.append({
                     "LotNo":         lot_no_input.strip().upper(),
                     "OrderId":       derived_order_id,
-                    "Customer name": po_lot_data.get("Customer name", ""),
+                    "Customer name": st.session_state.proc_out_cust_val.strip(),
                     "Item":          st.session_state.proc_out_item_val.strip(),
                     "Colour":        colour.strip(),
                     "Roll":          int(roll or 0),
@@ -1883,6 +1883,7 @@ elif menu == "Process Out":
                     }
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_out_lots     = []
+                    st.session_state.proc_out_cust_val = ""
                     st.session_state.proc_out_last_lot = ""
                     st.rerun()
         else:
