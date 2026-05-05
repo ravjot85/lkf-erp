@@ -4346,25 +4346,41 @@ elif menu == "Edit Process Out":
 
             # ── Editable lots ──
             st.markdown("#### Lots")
+            import re as _epo_re
+            def _epo_extract_oid(lot_no):
+                m = _epo_re.match(r'^(\d+)', lot_no.strip().upper())
+                return m.group(1) if m else ""
+
             lot_updates = {}
             for doc in po_lots:
-                lot = doc.to_dict()
+                lot    = doc.to_dict()
                 lot_no = lot.get("LotNo","")
                 with st.expander(f"Lot: {lot_no}  |  Order: {lot.get('OrderId','')}  |  {lot.get('Colour','')}",
                                  expanded=False):
                     lc1, lc2 = st.columns(2)
                     with lc1:
-                        st.text_input("Lot No",   value=lot_no,                        disabled=True, key=f"epo_ln_{doc.id}")
-                        st.text_input("Order ID", value=lot.get("OrderId",""),          disabled=True, key=f"epo_oi_{doc.id}")
-                        st.text_input("Customer", value=lot.get("Customer name",""),    disabled=True, key=f"epo_cu_{doc.id}")
-                        st.text_input("Item",     value=lot.get("Item",""),             disabled=True, key=f"epo_it_{doc.id}")
+                        # Initialise session state for Lot No on first render
+                        if f"epo_ln_{doc.id}" not in st.session_state:
+                            st.session_state[f"epo_ln_{doc.id}"] = lot_no
+                        e_lot_no = st.text_input("Lot No", key=f"epo_ln_{doc.id}")
+                        # OrderId auto-derived from current Lot No value
+                        derived_oid = _epo_extract_oid(e_lot_no) if e_lot_no.strip() else lot.get("OrderId","")
+                        st.text_input("Order ID (auto)", value=derived_oid, disabled=True, key=f"epo_oi_{doc.id}")
+                        st.text_input("Customer", value=lot.get("Customer name",""), disabled=True, key=f"epo_cu_{doc.id}")
+                        # Initialise Item in session state
+                        if f"epo_it_{doc.id}" not in st.session_state:
+                            st.session_state[f"epo_it_{doc.id}"] = lot.get("Item","")
+                        e_item = st.text_input("Item", key=f"epo_it_{doc.id}")
                     with lc2:
-                        e_colour  = st.text_input("Colour",          value=lot.get("Colour",""),   key=f"epo_col_{doc.id}")
-                        e_roll    = st.number_input("Roll",  min_value=0, value=int(lot.get("Roll",0) or 0),   key=f"epo_rol_{doc.id}")
-                        e_qty     = st.number_input("Qty",   min_value=0.0, value=float(lot.get("Qnty",0) or 0), step=0.5, key=f"epo_qty_{doc.id}")
-                        e_process = st.text_input("Process",         value=lot.get("Process",""),  key=f"epo_prc_{doc.id}")
-                        e_diagsm  = st.text_input("Dia / GSM",       value=lot.get("DiaGsm",""),   key=f"epo_dgs_{doc.id}")
+                        e_colour  = st.text_input("Colour",    value=lot.get("Colour",""),                       key=f"epo_col_{doc.id}")
+                        e_roll    = st.number_input("Roll",    min_value=0,   value=int(lot.get("Roll",0) or 0), key=f"epo_rol_{doc.id}")
+                        e_qty     = st.number_input("Qty",     min_value=0.0, value=float(lot.get("Qnty",0) or 0), step=0.5, key=f"epo_qty_{doc.id}")
+                        e_process = st.text_input("Process",   value=lot.get("Process",""),                      key=f"epo_prc_{doc.id}")
+                        e_diagsm  = st.text_input("Dia / GSM", value=lot.get("DiaGsm",""),                       key=f"epo_dgs_{doc.id}")
                     lot_updates[doc.id] = {
+                        "LotNo":   e_lot_no.strip().upper(),
+                        "OrderId": derived_oid,
+                        "Item":    e_item.strip(),
                         "Colour":  e_colour.strip(),
                         "Roll":    int(e_roll),
                         "Qnty":    float(e_qty),
