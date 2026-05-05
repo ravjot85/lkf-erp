@@ -4368,15 +4368,19 @@ elif menu == "Edit Process Out":
                 if f"epo_it_{doc.id}"       not in st.session_state:
                     st.session_state[f"epo_it_{doc.id}"]       = lot.get("Item","")
 
-                # ── Detect Lot No change and re-derive OrderId + Customer ──
+                # ── Detect Lot No change and re-derive OrderId + Customer + Item ──
                 current_ln = st.session_state[f"epo_ln_{doc.id}"]
                 if current_ln != st.session_state[f"epo_ln_prev_{doc.id}"]:
                     new_oid = _epo_extract_oid(current_ln)
-                    st.session_state[f"epo_oid_drv_{doc.id}"]  = new_oid
+                    st.session_state[f"epo_oid_drv_{doc.id}"] = new_oid
                     if new_oid:
                         _po = db.collection("po").document(new_oid).get()
-                        st.session_state[f"epo_cust_drv_{doc.id}"] = (
-                            _po.to_dict().get("Customer name","") if _po.exists else "")
+                        if _po.exists:
+                            _pod = _po.to_dict()
+                            st.session_state[f"epo_cust_drv_{doc.id}"] = _pod.get("Customer name","")
+                            st.session_state[f"epo_it_{doc.id}"]        = _pod.get("Item","")
+                        else:
+                            st.session_state[f"epo_cust_drv_{doc.id}"] = ""
                     else:
                         st.session_state[f"epo_cust_drv_{doc.id}"] = ""
                     st.session_state[f"epo_ln_prev_{doc.id}"] = current_ln
@@ -4402,10 +4406,11 @@ elif menu == "Edit Process Out":
                         e_process = st.text_input("Process",   value=lot.get("Process",""),                      key=f"epo_prc_{doc.id}")
                         e_diagsm  = st.text_input("Dia / GSM", value=lot.get("DiaGsm",""),                       key=f"epo_dgs_{doc.id}")
                     lot_updates[doc.id] = {
-                        "LotNo":   e_lot_no.strip().upper(),
-                        "OrderId": derived_oid,
-                        "Item":    e_item.strip(),
-                        "Colour":  e_colour.strip(),
+                        "LotNo":         e_lot_no.strip().upper(),
+                        "OrderId":       derived_oid,
+                        "Customer name": derived_cust,
+                        "Item":          e_item.strip(),
+                        "Colour":        e_colour.strip(),
                         "Roll":    int(e_roll),
                         "Qnty":    float(e_qty),
                         "Process": e_process.strip(),
