@@ -721,6 +721,7 @@ def _load_status_df():
 
         rows.append({
             "OrderId":        oid,
+            "CustomerPoNo":   d.get("customerpono", ""),
             "Customer":       d.get("Customer name", "").upper().strip().replace(" ", ""),
             "Item":           d.get("Item", ""),
             "Category":       d.get("Category", ""),
@@ -3122,11 +3123,11 @@ elif menu == "Reports":
             el.append(Spacer(1, 0.6*cm))
 
             # ── Section tables ──
-            tbl_cols  = ["Date","OrderId","Category","Customer","Item","GSM",
-                         "FabricQty","AccQty","FabricPrice","AccPrice"]
-            tbl_hdrs  = ["Date","Order ID","Category","Customer","Item","GSM",
-                         "Total Fabric Qty","Accessory Qty","Fabric Price","Accessory Price"]
-            col_w     = [2.2*cm,1.5*cm,1.8*cm,3*cm,3.5*cm,1.2*cm,2*cm,2*cm,2*cm,2*cm]
+            tbl_cols  = ["Date","OrderId","CustomerPoNo","Category","Item","GSM",
+                         "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
+            tbl_hdrs  = ["Date","Order ID","Cust PO No","Category","Item","GSM",
+                         "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
+            col_w     = [2*cm,1.5*cm,2*cm,1.8*cm,3.2*cm,1.1*cm,1.8*cm,1.6*cm,1.8*cm,1.8*cm,2.2*cm]
 
             sec_title_s = ParagraphStyle("st", parent=normal, fontSize=14,
                                          fontName="Helvetica-Bold", spaceAfter=4)
@@ -3160,17 +3161,23 @@ elif menu == "Reports":
 
                 data_rows = [[Paragraph(h, hdr_s) for h in tbl_hdrs]]
                 for _, row in sec_df.sort_values("OrderId", ascending=False).iterrows():
+                    img_url = str(row.get("image_url","") or "")
+                    img_cell = Paragraph(
+                        f'<link href="{img_url}"><u>View</u></link>' if img_url else "—",
+                        cell_s
+                    )
                     data_rows.append([
-                        Paragraph(fmt_date(str(row.get("Date",""))), cell_s),
-                        Paragraph(str(row.get("OrderId","")),         cell_s),
-                        Paragraph(str(row.get("Category","")),        cell_s),
-                        Paragraph(str(row.get("Customer","")),        cell_s),
-                        Paragraph(str(row.get("Item","")),            cell_s),
-                        Paragraph(str(int(row.get("GSM",0))),         cell_s),
-                        Paragraph(str(int(row.get("FabricQty",0))),   cell_s),
-                        Paragraph(str(int(row.get("AccQty",0))),      cell_s),
-                        Paragraph(str(int(row.get("FabricPrice",0))), cell_s),
-                        Paragraph(str(int(row.get("AccPrice",0))),    cell_s),
+                        Paragraph(fmt_date(str(row.get("Date",""))),    cell_s),
+                        Paragraph(str(row.get("OrderId","")),           cell_s),
+                        Paragraph(str(row.get("CustomerPoNo","") or ""),cell_s),
+                        Paragraph(str(row.get("Category","")),          cell_s),
+                        Paragraph(str(row.get("Item","")),              cell_s),
+                        Paragraph(str(int(row.get("GSM",0))),           cell_s),
+                        Paragraph(str(int(row.get("FabricQty",0))),     cell_s),
+                        Paragraph(str(int(row.get("AccQty",0))),        cell_s),
+                        Paragraph(str(int(row.get("FabricPrice",0))),   cell_s),
+                        Paragraph(str(int(row.get("AccPrice",0))),      cell_s),
+                        img_cell,
                     ])
 
                 dt = Table(data_rows, colWidths=col_w, repeatRows=1)
@@ -3198,6 +3205,9 @@ elif menu == "Reports":
         with cc2:
             date_filter = st.selectbox("Date Range", ["All Dates", "This Month", "Custom"], key="cr_drange")
 
+        with cc3:
+            include_dispatched = st.checkbox("Include Dispatched", value=False, key="cr_incl_disp")
+
         from_date, to_date = None, None
         if date_filter == "Custom":
             dc1, dc2 = st.columns(2)
@@ -3207,58 +3217,65 @@ elif menu == "Reports":
                 to_date   = st.date_input("To", format="DD/MM/YYYY", key="cr_to")
 
         if sel_cust:
-            cdf = df_active[df_active["Customer"] == sel_cust].copy()
+            # Include Dispatched if toggled; otherwise use only active orders
+            src_df = df if include_dispatched else df_active
+            cdf = src_df[src_df["Customer"] == sel_cust].copy()
 
             # Apply date filter
             if date_filter == "This Month":
                 from datetime import datetime as _dt
-                cdf["_d"] = pd.to_datetime(cdf["Date"], errors="coerce")
+                cdf["_d"] = pd.to_datetime(cdf["Date"], dayfirst=True, errors="coerce")
                 now = _dt.today()
                 cdf = cdf[(cdf["_d"].dt.month == now.month) & (cdf["_d"].dt.year == now.year)]
                 date_range_label = now.strftime("%B %Y")
             elif date_filter == "Custom" and from_date and to_date:
-                cdf["_d"] = pd.to_datetime(cdf["Date"], errors="coerce")
+                cdf["_d"] = pd.to_datetime(cdf["Date"], dayfirst=True, errors="coerce")
                 cdf = cdf[(cdf["_d"].dt.date >= from_date) & (cdf["_d"].dt.date <= to_date)]
                 date_range_label = f"{from_date.strftime('%d/%m/%Y')} – {to_date.strftime('%d/%m/%Y')}"
             else:
                 date_range_label = "All Dates"
 
-            in_prod_df   = cdf[~cdf["Status"].isin(["Pending","Dispatched"])]
+            in_prod_df   = cdf[~cdf["Status"].isin(["Pending","Dispatched","Cancelled"])]
             pending_cdf  = cdf[cdf["Status"] == "Pending"]
-            dispatch_cdf = cdf[cdf["Status"] == "Dispatched"]
+            dispatch_cdf = cdf[cdf["Status"] == "Dispatched"] if include_dispatched else pd.DataFrame()
 
             # KPI tiles
             ck1, ck2, ck3, ck4 = st.columns(4)
             ck1.metric("⚙️ In Production", len(in_prod_df),   f"{int(in_prod_df['FabricQty'].sum())} Kgs")
             ck2.metric("⏳ Pending",        len(pending_cdf),  f"{int(pending_cdf['FabricQty'].sum())} Kgs")
-            ck3.metric("📦 Dispatched",     len(dispatch_cdf), f"{int(dispatch_cdf['FabricQty'].sum())} Kgs")
+            ck3.metric("📦 Dispatched",     len(dispatch_cdf) if include_dispatched else "—",
+                                            f"{int(dispatch_cdf['FabricQty'].sum())} Kgs" if include_dispatched else "")
             ck4.metric("📊 Grand Total",    len(cdf),          f"{int(cdf['FabricQty'].sum())} Kgs")
 
             st.divider()
 
-            disp_cols = ["Date","OrderId","Category","Customer","Item","GSM",
-                         "FabricQty","AccQty","FabricPrice","AccPrice","Status"]
+            disp_cols = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                         "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
 
             def show_section(label, sdf):
                 if sdf.empty:
                     return
                 st.markdown(f"**{label}** — Orders: {len(sdf)} | Qty: {int(sdf['FabricQty'].sum())} Kgs")
                 c = [x for x in disp_cols if x in sdf.columns]
-                st.dataframe(sdf[c].sort_values("OrderId", ascending=False),
-                             use_container_width=True, hide_index=True)
+                st.dataframe(
+                    sdf[c].sort_values("OrderId", ascending=False),
+                    use_container_width=True, hide_index=True,
+                    column_config={
+                        "image_url": st.column_config.LinkColumn("Image", display_text="🖼️ View"),
+                    }
+                )
 
             show_section("IN PRODUCTION", in_prod_df)
             show_section("PENDING",       pending_cdf)
-            show_section("DISPATCHED",    dispatch_cdf)
+            if include_dispatched:
+                show_section("DISPATCHED", dispatch_cdf)
 
             st.divider()
 
             if st.button("📄 Generate Customer Report PDF", type="primary", key="cr_gen"):
-                sections = {
-                    "In Production": in_prod_df,
-                    "Pending":       pending_cdf,
-                    "Dispatched":    dispatch_cdf,
-                }
+                sections = {"In Production": in_prod_df, "Pending": pending_cdf}
+                if include_dispatched and not dispatch_cdf.empty:
+                    sections["Dispatched"] = dispatch_cdf
                 with st.spinner("Generating PDF..."):
                     try:
                         pdf_bytes = build_customer_report_pdf(sel_cust, date_range_label, sections)
