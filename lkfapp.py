@@ -4389,9 +4389,11 @@ elif menu == "Edit Process Out":
                     lc1, lc2 = st.columns(2)
                     with lc1:
                         e_lot_no = st.text_input("Lot No", key=f"epo_ln_{doc.id}")
-                        # No key on disabled fields — value= controls display directly
-                        st.text_input("Order ID (auto)", value=derived_oid,  disabled=True)
-                        st.text_input("Customer",        value=derived_cust, disabled=True)
+                        # Set session state before widget so value= is respected each render
+                        st.session_state[f"epo_oi_disp_{doc.id}"] = derived_oid
+                        st.text_input("Order ID (auto)", key=f"epo_oi_disp_{doc.id}", disabled=True)
+                        st.session_state[f"epo_cu_disp_{doc.id}"] = derived_cust
+                        st.text_input("Customer", key=f"epo_cu_disp_{doc.id}", disabled=True)
                         e_item = st.text_input("Item", key=f"epo_it_{doc.id}")
                     with lc2:
                         e_colour  = st.text_input("Colour",    value=lot.get("Colour",""),                       key=f"epo_col_{doc.id}")
