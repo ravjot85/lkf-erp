@@ -653,7 +653,9 @@ def get_processor_list():
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_status_df():
     po_docs       = [d.to_dict() for d in db.collection("po").stream()]
-    shoot_ids     = {d.to_dict().get("OrderId","") for d in db.collection("shoot_order").stream()}
+    shoot_raw     = [d.to_dict() for d in db.collection("shoot_order").stream()]
+    shoot_dates   = {d.get("OrderId",""): d.get("Date","") for d in shoot_raw if d.get("OrderId","")}
+    shoot_ids     = set(shoot_dates.keys())
     proc_out_raw  = [d.to_dict() for d in db.collection("process_out").stream()]
     proc_in_ids   = {d.to_dict().get("OrderId","") for d in db.collection("process_inward").stream()}
     cancel_ids    = {d.to_dict().get("OrderId","") for d in db.collection("cancel_orders").stream()
@@ -725,6 +727,7 @@ def _load_status_df():
             "Item":           d.get("Item", ""),
             "Category":       d.get("Category", ""),
             "Date":           _fmt_date(d.get("Date", "")),
+            "ShootDate":      _fmt_date(shoot_dates.get(oid, "")),
             "GSM":            int(d.get("gsm") or 0),
             "FabricQty":      po_fabric,
             "FabricPrice":    float(d.get("fabricprice") or 0),
@@ -3243,11 +3246,11 @@ elif menu == "Reports":
             el.append(Spacer(1, 0.6*cm))
 
             # ── Section tables ──
-            tbl_cols  = ["Date","OrderId","CustomerPoNo","Category","Item","GSM",
+            tbl_cols  = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Item","GSM",
                          "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
-            tbl_hdrs  = ["Date","Order ID","Cust PO No","Category","Item","GSM",
+            tbl_hdrs  = ["PO Date","Shoot Date","Order ID","Cust PO No","Category","Item","GSM",
                          "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
-            col_w     = [2*cm,1.5*cm,2*cm,1.8*cm,3.2*cm,1.1*cm,1.8*cm,1.6*cm,1.8*cm,1.8*cm,2.2*cm]
+            col_w     = [1.8*cm,1.8*cm,1.5*cm,2*cm,1.6*cm,2.8*cm,1*cm,1.6*cm,1.4*cm,1.6*cm,1.6*cm,2*cm]
 
             sec_title_s = ParagraphStyle("st", parent=normal, fontSize=14,
                                          fontName="Helvetica-Bold", spaceAfter=4)
@@ -3287,10 +3290,11 @@ elif menu == "Reports":
                         cell_s
                     )
                     data_rows.append([
-                        Paragraph(fmt_date(str(row.get("Date",""))),    cell_s),
-                        Paragraph(str(row.get("OrderId","")),           cell_s),
-                        Paragraph(str(row.get("CustomerPoNo","") or ""),cell_s),
-                        Paragraph(str(row.get("Category","")),          cell_s),
+                        Paragraph(fmt_date(str(row.get("Date",""))),       cell_s),
+                        Paragraph(str(row.get("ShootDate","") or "—"),     cell_s),
+                        Paragraph(str(row.get("OrderId","")),              cell_s),
+                        Paragraph(str(row.get("CustomerPoNo","") or ""),   cell_s),
+                        Paragraph(str(row.get("Category","")),             cell_s),
                         Paragraph(str(row.get("Item","")),              cell_s),
                         Paragraph(str(int(row.get("GSM",0))),           cell_s),
                         Paragraph(str(int(row.get("FabricQty",0))),     cell_s),
@@ -3369,7 +3373,7 @@ elif menu == "Reports":
 
             st.divider()
 
-            disp_cols = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+            disp_cols = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
                          "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
 
             def show_section(label, sdf):
