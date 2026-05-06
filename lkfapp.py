@@ -3246,11 +3246,18 @@ elif menu == "Reports":
             el.append(Spacer(1, 0.6*cm))
 
             # ── Section tables ──
-            tbl_cols  = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Item","GSM",
-                         "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
-            tbl_hdrs  = ["PO Date","Shoot Date","Order ID","Cust PO No","Category","Item","GSM",
-                         "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
-            col_w     = [1.8*cm,1.8*cm,1.5*cm,2*cm,1.6*cm,2.8*cm,1*cm,1.6*cm,1.4*cm,1.6*cm,1.6*cm,2*cm]
+            # In Production includes Shoot Date; other sections do not
+            _pdf_cols_prod = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
+            _pdf_hdrs_prod = ["PO Date","Shoot Date","Order ID","Cust PO No","Category","Item","GSM",
+                              "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
+            _pdf_col_w_prod = [1.8*cm,1.8*cm,1.5*cm,2*cm,1.6*cm,2.8*cm,1*cm,1.6*cm,1.4*cm,1.6*cm,1.6*cm,2*cm]
+
+            _pdf_cols_base = ["Date","OrderId","CustomerPoNo","Category","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
+            _pdf_hdrs_base = ["Date","Order ID","Cust PO No","Category","Item","GSM",
+                              "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
+            _pdf_col_w_base = [2*cm,1.5*cm,2*cm,1.8*cm,3.2*cm,1*cm,1.8*cm,1.6*cm,1.8*cm,1.8*cm,2.2*cm]
 
             sec_title_s = ParagraphStyle("st", parent=normal, fontSize=14,
                                          fontName="Helvetica-Bold", spaceAfter=4)
@@ -3282,27 +3289,33 @@ elif menu == "Reports":
                 el.append(sec_tbl)
                 el.append(Spacer(1, 0.15*cm))
 
+                is_prod   = sec_name == "In Production"
+                tbl_hdrs  = _pdf_hdrs_prod  if is_prod else _pdf_hdrs_base
+                col_w     = _pdf_col_w_prod if is_prod else _pdf_col_w_base
+
                 data_rows = [[Paragraph(h, hdr_s) for h in tbl_hdrs]]
                 for _, row in sec_df.sort_values("OrderId", ascending=False).iterrows():
-                    img_url = str(row.get("image_url","") or "")
+                    img_url  = str(row.get("image_url","") or "")
                     img_cell = Paragraph(
-                        f'<link href="{img_url}"><u>View</u></link>' if img_url else "—",
-                        cell_s
-                    )
-                    data_rows.append([
-                        Paragraph(fmt_date(str(row.get("Date",""))),       cell_s),
-                        Paragraph(str(row.get("ShootDate","") or "—"),     cell_s),
-                        Paragraph(str(row.get("OrderId","")),              cell_s),
-                        Paragraph(str(row.get("CustomerPoNo","") or ""),   cell_s),
-                        Paragraph(str(row.get("Category","")),             cell_s),
-                        Paragraph(str(row.get("Item","")),              cell_s),
-                        Paragraph(str(int(row.get("GSM",0))),           cell_s),
-                        Paragraph(str(int(row.get("FabricQty",0))),     cell_s),
-                        Paragraph(str(int(row.get("AccQty",0))),        cell_s),
-                        Paragraph(str(int(row.get("FabricPrice",0))),   cell_s),
-                        Paragraph(str(int(row.get("AccPrice",0))),      cell_s),
+                        f'<link href="{img_url}"><u>View</u></link>' if img_url else "—", cell_s)
+                    base_cells = [
+                        Paragraph(fmt_date(str(row.get("Date",""))),      cell_s),
+                        Paragraph(str(row.get("OrderId","")),             cell_s),
+                        Paragraph(str(row.get("CustomerPoNo","") or ""),  cell_s),
+                        Paragraph(str(row.get("Category","")),            cell_s),
+                        Paragraph(str(row.get("Item","")),                cell_s),
+                        Paragraph(str(int(row.get("GSM",0))),             cell_s),
+                        Paragraph(str(int(row.get("FabricQty",0))),       cell_s),
+                        Paragraph(str(int(row.get("AccQty",0))),          cell_s),
+                        Paragraph(str(int(row.get("FabricPrice",0))),     cell_s),
+                        Paragraph(str(int(row.get("AccPrice",0))),        cell_s),
                         img_cell,
-                    ])
+                    ]
+                    if is_prod:
+                        shoot_cell = Paragraph(str(row.get("ShootDate","") or "—"), cell_s)
+                        data_rows.append([base_cells[0], shoot_cell] + base_cells[1:])
+                    else:
+                        data_rows.append(base_cells)
 
                 dt = Table(data_rows, colWidths=col_w, repeatRows=1)
                 dt.setStyle(TableStyle([
@@ -3373,14 +3386,16 @@ elif menu == "Reports":
 
             st.divider()
 
-            disp_cols = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
-                         "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
+            _base_cols     = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
+            _prod_cols     = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
 
-            def show_section(label, sdf):
+            def show_section(label, sdf, cols):
                 if sdf.empty:
                     return
                 st.markdown(f"**{label}** — Orders: {len(sdf)} | Qty: {int(sdf['FabricQty'].sum())} Kgs")
-                c = [x for x in disp_cols if x in sdf.columns]
+                c = [x for x in cols if x in sdf.columns]
                 st.dataframe(
                     sdf[c].sort_values("OrderId", ascending=False),
                     use_container_width=True, hide_index=True,
@@ -3389,10 +3404,10 @@ elif menu == "Reports":
                     }
                 )
 
-            show_section("IN PRODUCTION", in_prod_df)
-            show_section("PENDING",       pending_cdf)
+            show_section("IN PRODUCTION", in_prod_df,   _prod_cols)
+            show_section("PENDING",       pending_cdf,   _base_cols)
             if include_dispatched:
-                show_section("DISPATCHED", dispatch_cdf)
+                show_section("DISPATCHED", dispatch_cdf, _base_cols)
 
             st.divider()
 
