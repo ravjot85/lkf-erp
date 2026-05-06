@@ -298,6 +298,7 @@ _REPORTS = [
     "📦 Pending by Item",
     "🔄 Processing Report",
     "📦 Part Dispatched",
+    "🏠 In House Finishing",
 ]
 _MASTERS = [
     ("👥", "Customer Master"),
@@ -3885,6 +3886,56 @@ elif menu == "Reports":
             sc1, sc2 = st.columns(2)
             sc1.metric("Fabric not fully dispatched", len(fab_short))
             sc2.metric("Accessory not fully dispatched", len(acc_short))
+
+     elif rpt_type == "🏠 In House Finishing":
+        st.markdown("### 🏠 In House Finishing / Packing Report")
+        st.caption("Orders received back from processing and currently in-house for finishing or packing.")
+
+        if st.button("🔄 Refresh", key="ih_refresh"):
+            st.rerun()
+
+        ih_df = df[df["Status"] == "In House Finishing/Packing"].copy()
+
+        if ih_df.empty:
+            st.success("✅ No orders currently in-house finishing/packing.")
+        else:
+            # ── KPI ──
+            k1, k2 = st.columns(2)
+            k1.metric("Orders In House", len(ih_df))
+            k2.metric("Total Fabric Qty", f"{ih_df['FabricQty'].sum():,.0f} Kgs")
+
+            st.divider()
+
+            # ── Search ──
+            ih_search = st.text_input("🔍 Search Order ID or Customer", key="ih_search")
+            if ih_search.strip():
+                q = ih_search.strip().upper()
+                ih_df = ih_df[
+                    ih_df["OrderId"].astype(str).str.upper().str.contains(q, na=False) |
+                    ih_df["Customer"].str.upper().str.contains(q, na=False)
+                ]
+
+            st.markdown(f"**{len(ih_df)} orders** — sorted by Order ID")
+
+            # ── Table with PO PDF link ──
+            disp_df = ih_df[[
+                "OrderId","CustomerPoNo","Date","ShootDate",
+                "Customer","Item","Category","GSM","FabricQty","pdf_url",
+            ]].rename(columns={
+                "CustomerPoNo": "Cust PO No",
+                "ShootDate":    "Shoot Date",
+                "FabricQty":    "Fabric Qty",
+                "pdf_url":      "PO PDF",
+            }).sort_values("OrderId", ascending=False)
+
+            st.dataframe(
+                disp_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "PO PDF": st.column_config.LinkColumn("PO PDF", display_text="📄 View"),
+                }
+            )
 
      elif rpt_type == "__removed__":
         pass  # Print Packing List moved to Packing form tab
