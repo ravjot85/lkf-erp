@@ -1871,9 +1871,9 @@ elif menu == "Process Out":
                         "VehicleNo": vehicle.strip(),
                     }
                     with st.spinner("Saving..."):
-                        # Save lots to Firestore
-                        for lot in st.session_state.proc_out_lots:
-                            doc_id = f"{challan_no}_{lot['LotNo']}"
+                        # Save lots to Firestore — use index suffix so duplicate lot nos don't overwrite
+                        for i, lot in enumerate(st.session_state.proc_out_lots):
+                            doc_id = f"{challan_no}_{lot['LotNo']}_{i}"
                             db.collection("process_out").document(doc_id).set({
                                 **header,
                                 **lot,
@@ -1887,7 +1887,6 @@ elif menu == "Process Out":
                     }
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_out_lots     = []
-                    st.session_state.proc_out_cust_val = ""
                     st.session_state.proc_out_last_lot = ""
                     st.rerun()
         else:
