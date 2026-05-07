@@ -2693,10 +2693,12 @@ elif menu == "Packing":
                     if slip_count > 1:
                         st.info(f"ℹ️ PDF merged across {slip_count} packing slips for Order {order_id_in.strip()}")
 
-                st.session_state.pack_result = {
+                _saved_result = {
                     "raw_id": raw_id, "pdf_bytes": pdf_bytes,
                     "pdf_url": pdf_url, "pdf_name": pdf_name,
                 }
+                _clear_packing()                          # clears form fields
+                st.session_state.pack_result = _saved_result  # restore result card
                 st.rerun()
 
         if st.session_state.pack_result:
