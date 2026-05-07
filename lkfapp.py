@@ -4498,6 +4498,88 @@ elif menu == "Edit Process Out":
                     db.collection("process_out").document(doc_id).update({**hdr_update, **lot_data})
                 st.success(f"✅ Process Out Challan {epo_challan.strip()} updated successfully")
 
+            st.divider()
+            st.markdown("#### ➕ Add New Lot to this Challan")
+
+            with st.expander("Add Lot", expanded=False):
+                al1, al2 = st.columns(2)
+                with al1:
+                    if "epo_new_ln" not in st.session_state:
+                        st.session_state.epo_new_ln      = ""
+                    if "epo_new_ln_prev" not in st.session_state:
+                        st.session_state.epo_new_ln_prev = ""
+                    if "epo_new_oid" not in st.session_state:
+                        st.session_state.epo_new_oid     = ""
+                    if "epo_new_cust" not in st.session_state:
+                        st.session_state.epo_new_cust    = ""
+                    if "epo_new_item" not in st.session_state:
+                        st.session_state.epo_new_item    = ""
+
+                    # Auto-derive OrderId + Customer + Item when Lot No changes
+                    cur_new_ln = st.session_state.epo_new_ln
+                    if cur_new_ln != st.session_state.epo_new_ln_prev:
+                        new_oid = _epo_extract_oid(cur_new_ln)
+                        st.session_state.epo_new_oid  = new_oid
+                        if new_oid:
+                            _npo = db.collection("po").document(new_oid).get()
+                            if _npo.exists:
+                                _npod = _npo.to_dict()
+                                st.session_state.epo_new_cust = _npod.get("Customer name","")
+                                st.session_state.epo_new_item = _npod.get("Item","")
+                            else:
+                                st.session_state.epo_new_cust = ""
+                        else:
+                            st.session_state.epo_new_cust = ""
+                        st.session_state.epo_new_ln_prev = cur_new_ln
+
+                    new_lot_no = st.text_input("Lot No",  key="epo_new_ln")
+                    st.session_state["epo_new_oid_disp"]  = st.session_state.epo_new_oid
+                    st.text_input("Order ID (auto)", key="epo_new_oid_disp",  disabled=True)
+                    st.session_state["epo_new_cust_disp"] = st.session_state.epo_new_cust
+                    st.text_input("Customer",        key="epo_new_cust_disp", disabled=True)
+                    new_item    = st.text_input("Item", key="epo_new_item")
+
+                with al2:
+                    new_colour  = st.text_input("Colour",    key="epo_new_colour")
+                    new_roll    = st.number_input("Roll",    min_value=0,   value=None, placeholder="0",    key="epo_new_roll")
+                    new_qty     = st.number_input("Qty",     min_value=0.0, value=None, placeholder="0.00", step=0.5, key="epo_new_qty")
+                    new_process = st.text_input("Process",   key="epo_new_process")
+                    new_diagsm  = st.text_input("Dia / GSM", key="epo_new_diagsm")
+
+                if st.button("➕ Add Lot to Challan", key="epo_add_lot_btn"):
+                    if not new_lot_no.strip():
+                        st.error("Enter a Lot No")
+                    else:
+                        challan_no_str = epo_challan.strip()
+                        # Unique doc_id: challan_lotno_<existing_count + index>
+                        existing_count = len(po_lots)
+                        new_doc_id = f"{challan_no_str}_{new_lot_no.strip().upper()}_{existing_count}"
+                        hdr = {
+                            "ChallanNo": challan_no_str,
+                            "Date":      epo_date.strftime("%Y-%m-%d"),
+                            "PartyName": epo_party,
+                            "GstNo":     first.get("GstNo",""),
+                            "VehicleNo": epo_vehicle.strip(),
+                        }
+                        db.collection("process_out").document(new_doc_id).set({
+                            **hdr,
+                            "LotNo":         new_lot_no.strip().upper(),
+                            "OrderId":       st.session_state.epo_new_oid,
+                            "Customer name": st.session_state.epo_new_cust,
+                            "Item":          new_item.strip(),
+                            "Colour":        new_colour.strip(),
+                            "Roll":          int(new_roll or 0),
+                            "Qnty":          float(new_qty or 0),
+                            "Process":       new_process.strip(),
+                            "DiaGsm":        new_diagsm.strip(),
+                        })
+                        # Clear add-lot fields
+                        for k in ["epo_new_ln","epo_new_ln_prev","epo_new_oid","epo_new_cust",
+                                  "epo_new_item","epo_new_colour","epo_new_process","epo_new_diagsm"]:
+                            st.session_state[k] = ""
+                        st.success(f"✅ Lot {new_lot_no.strip().upper()} added to Challan {challan_no_str}")
+                        st.rerun()
+
 
 # ═════════════════════════════════════════════════════════
 #  EDIT PROCESS INWARD
