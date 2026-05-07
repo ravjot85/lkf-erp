@@ -4471,11 +4471,17 @@ elif menu == "Edit Process Out":
                         st.text_input("Customer", key=f"epo_cu_disp_{doc.id}", disabled=True)
                         e_item = st.text_input("Item", key=f"epo_it_{doc.id}")
                     with lc2:
-                        e_colour  = st.text_input("Colour",    value=lot.get("Colour",""),                       key=f"epo_col_{doc.id}")
-                        e_roll    = st.number_input("Roll",    min_value=0,   value=int(lot.get("Roll",0) or 0), key=f"epo_rol_{doc.id}")
+                        e_colour  = st.text_input("Colour",    value=lot.get("Colour",""),                         key=f"epo_col_{doc.id}")
+                        e_roll    = st.number_input("Roll",    min_value=0,   value=int(lot.get("Roll",0) or 0),   key=f"epo_rol_{doc.id}")
                         e_qty     = st.number_input("Qty",     min_value=0.0, value=float(lot.get("Qnty",0) or 0), step=0.5, key=f"epo_qty_{doc.id}")
-                        e_process = st.text_input("Process",   value=lot.get("Process",""),                      key=f"epo_prc_{doc.id}")
-                        e_diagsm  = st.text_input("Dia / GSM", value=lot.get("DiaGsm",""),                       key=f"epo_dgs_{doc.id}")
+                        e_process = st.text_input("Process",   value=lot.get("Process",""),                        key=f"epo_prc_{doc.id}")
+                        e_diagsm  = st.text_input("Dia / GSM", value=lot.get("DiaGsm",""),                         key=f"epo_dgs_{doc.id}")
+                    # Delete lot
+                    del_confirm = st.checkbox(f"Confirm delete Lot **{lot_no}**", key=f"epo_del_chk_{doc.id}")
+                    if st.button("🗑️ Delete this Lot", key=f"epo_del_btn_{doc.id}", disabled=not del_confirm):
+                        db.collection("process_out").document(doc.id).delete()
+                        st.success(f"Lot {lot_no} deleted.")
+                        st.rerun()
                     lot_updates[doc.id] = {
                         "LotNo":         e_lot_no.strip().upper(),
                         "OrderId":       derived_oid,
