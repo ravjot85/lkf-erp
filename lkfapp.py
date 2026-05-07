@@ -4579,10 +4579,12 @@ elif menu == "Edit Process Out":
                             "Process":       new_process.strip(),
                             "DiaGsm":        new_diagsm.strip(),
                         })
-                        # Clear add-lot fields
+                        # Clear add-lot fields — use del (not =) to avoid widget-already-rendered error
                         for k in ["epo_new_ln","epo_new_ln_prev","epo_new_oid","epo_new_cust",
-                                  "epo_new_item","epo_new_colour","epo_new_process","epo_new_diagsm"]:
-                            st.session_state[k] = ""
+                                  "epo_new_item","epo_new_colour","epo_new_process","epo_new_diagsm",
+                                  "epo_new_roll","epo_new_qty"]:
+                            if k in st.session_state:
+                                del st.session_state[k]
                         st.success(f"✅ Lot {new_lot_no.strip().upper()} added to Challan {challan_no_str}")
                         st.rerun()
 
