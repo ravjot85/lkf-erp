@@ -4381,6 +4381,38 @@ elif menu == "Delete Packing List":
 elif menu == "Edit Process Out":
     st.markdown('<div class="page-header"><h1>✏️ Edit Process Out</h1></div>', unsafe_allow_html=True)
 
+    import streamlit.components.v1 as _epo_cv1
+    _epo_cv1.html("""
+    <script>
+    (function() {
+        function getInputs() {
+            return Array.from(window.parent.document.querySelectorAll(
+                'input[type="text"]:not([disabled]), input[type="number"]:not([disabled])'
+            ));
+        }
+        function setupEnterNav() {
+            getInputs().forEach(function(inp) {
+                if (inp._enterBound) return;
+                inp._enterBound = true;
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    var inputs = getInputs();
+                    var idx = inputs.indexOf(inp);
+                    if (idx >= 0 && idx < inputs.length - 1) {
+                        inputs[idx + 1].focus();
+                        inputs[idx + 1].select();
+                    }
+                });
+            });
+        }
+        var obs = new MutationObserver(setupEnterNav);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setupEnterNav();
+    })();
+    </script>
+    """, height=0)
+
     epo_challan = st.text_input("Enter Challan No", key="epo_challan_no")
 
     if epo_challan.strip():
