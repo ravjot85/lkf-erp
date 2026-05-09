@@ -2590,7 +2590,7 @@ elif menu == "Packing":
                 st.session_state[rows_key].append({"id": nid, "wc": 12})
                 st.rerun()
 
-            # Live output preview
+            # Build output lines (no live preview — avoids rerun-on-keypress dimming)
             lines = []
             for row in st.session_state[rows_key]:
                 rid    = row["id"]
@@ -2600,10 +2600,6 @@ elif menu == "Packing":
                 ws = [w for w in ws if w]
                 if colour and ws:
                     lines.append(f"{colour}: {','.join(ws)}")
-
-            st.markdown(f"**{section_label.split()[0]} Output Preview**")
-            st.text_area(f"{prefix}_output_preview", value="\n".join(lines), disabled=True,
-                         height=90, label_visibility="collapsed")
             return lines
 
         fc, ac = st.columns(2)
