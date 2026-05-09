@@ -2482,7 +2482,7 @@ elif menu == "Packing":
 
     # ── Clear callback ──
     def _clear_packing():
-        for k in [k for k in st.session_state if k.startswith(("fc_", "ac_", "pack_oid", "pack_item"))]:
+        for k in [k for k in st.session_state if k.startswith(("fc_", "ac_", "pack_oid", "pack_item", "pack_cust"))]:
             del st.session_state[k]
         st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
         st.session_state.pack_fabric_nid  = 1
