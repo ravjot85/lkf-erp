@@ -628,7 +628,7 @@ def get_next_order_id() -> str:
 
 
 def get_customer_list():
-    return sorted({doc.id.upper().strip().replace(" ", "") for doc in db.collection("customer_master").stream()})
+    return sorted({doc.id.upper().strip() for doc in db.collection("customer_master").stream()})
 
 
 def _fmt_date(s: str) -> str:
@@ -724,7 +724,7 @@ def _load_status_df():
         rows.append({
             "OrderId":        oid,
             "CustomerPoNo":   d.get("customerpono", ""),
-            "Customer":       d.get("Customer name", "").upper().strip().replace(" ", ""),
+            "Customer":       d.get("Customer name", "").upper().strip(),
             "Item":           d.get("Item", ""),
             "Category":       d.get("Category", ""),
             "Date":           _fmt_date(d.get("Date", "")),
@@ -985,10 +985,16 @@ if menu == "Dashboard":
             <p class="kpi-sub">{int(qty):,} qty</p>
         </div>"""
 
-    k1, k2, k3 = st.columns(3)
-    k1.markdown(kpi("Total Active POs", len(df_active),  df_active["FabricQty"].sum(),  "total"),    unsafe_allow_html=True)
-    k2.markdown(kpi("⏳ Pending",        len(pending_df), pending_df["FabricQty"].sum(), "pending"),  unsafe_allow_html=True)
-    k3.markdown(kpi("⚙️ In Production", len(prod_df),    prod_df["FabricQty"].sum(),    "knitting"), unsafe_allow_html=True)
+    k1, k2 = st.columns(2)
+    k1.markdown(kpi("Total Active POs", len(df_active),  df_active["FabricQty"].sum(),  "total"),   unsafe_allow_html=True)
+    k2.markdown(kpi("⏳ Pending",        len(pending_df), pending_df["FabricQty"].sum(), "pending"), unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("**⚙️ In Production**", unsafe_allow_html=False)
+    p1, p2, p3 = st.columns(3)
+    p1.markdown(kpi("🧶 Knitting",             len(knit_df),    knit_df["FabricQty"].sum(),    "knitting"), unsafe_allow_html=True)
+    p2.markdown(kpi("💧 On Dyeing / Washing",  len(dye_df),     dye_df["FabricQty"].sum(),     "pending"),  unsafe_allow_html=True)
+    p3.markdown(kpi("🏠 In House F/P",         len(inhouse_df), inhouse_df["FabricQty"].sum(), "total"),    unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -4162,7 +4168,7 @@ elif menu == "Edit PO":
 
             # Normalise stored values for comparison
             po_category = (d.get("Category","") or "").upper().strip()
-            po_customer = (d.get("Customer name","") or "").upper().strip().replace(" ", "")
+            po_customer = (d.get("Customer name","") or "").upper().strip()
             po_item     = (d.get("Item","") or "").upper().strip()
 
             ec1, ec2 = st.columns(2)
