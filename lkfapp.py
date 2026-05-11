@@ -163,6 +163,10 @@ st.markdown("""
 .kpi-label { color: #A08060; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 6px; }
 .kpi-value { color: #3D2010; font-size: 30px; font-weight: 700; margin: 0 0 4px; line-height:1; }
 .kpi-sub   { color: #C4956A; font-size: 13px; margin: 0; }
+.kpi-card.sub { padding: 10px 14px; border-radius: 8px; }
+.kpi-card.sub .kpi-label { font-size: 10px; margin: 0 0 3px; }
+.kpi-card.sub .kpi-value { font-size: 22px; }
+.kpi-card.sub .kpi-sub   { font-size: 11px; }
 
 /* ── Section headers ── */
 .section-header {
@@ -985,16 +989,16 @@ if menu == "Dashboard":
             <p class="kpi-sub">{int(qty):,} qty</p>
         </div>"""
 
-    k1, k2 = st.columns(2)
-    k1.markdown(kpi("Total Active POs", len(df_active),  df_active["FabricQty"].sum(),  "total"),   unsafe_allow_html=True)
-    k2.markdown(kpi("⏳ Pending",        len(pending_df), pending_df["FabricQty"].sum(), "pending"), unsafe_allow_html=True)
+    k1, k2, k3 = st.columns(3)
+    k1.markdown(kpi("Total Active POs", len(df_active),  df_active["FabricQty"].sum(),  "total"),    unsafe_allow_html=True)
+    k2.markdown(kpi("⏳ Pending",        len(pending_df), pending_df["FabricQty"].sum(), "pending"),  unsafe_allow_html=True)
+    k3.markdown(kpi("⚙️ In Production", len(prod_df),    prod_df["FabricQty"].sum(),    "knitting"), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**⚙️ In Production**", unsafe_allow_html=False)
     p1, p2, p3 = st.columns(3)
-    p1.markdown(kpi("🧶 Knitting",             len(knit_df),    knit_df["FabricQty"].sum(),    "knitting"), unsafe_allow_html=True)
-    p2.markdown(kpi("💧 On Dyeing / Washing",  len(dye_df),     dye_df["FabricQty"].sum(),     "pending"),  unsafe_allow_html=True)
-    p3.markdown(kpi("🏠 In House F/P",         len(inhouse_df), inhouse_df["FabricQty"].sum(), "total"),    unsafe_allow_html=True)
+    p1.markdown(kpi("🧶 Knitting",           len(knit_df),    knit_df["FabricQty"].sum(),    "knitting sub"), unsafe_allow_html=True)
+    p2.markdown(kpi("💧 On Dyeing/Washing",  len(dye_df),     dye_df["FabricQty"].sum(),     "dyeing sub"),   unsafe_allow_html=True)
+    p3.markdown(kpi("🏠 In House F/P",       len(inhouse_df), inhouse_df["FabricQty"].sum(), "inhouse sub"),  unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
