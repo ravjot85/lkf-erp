@@ -729,6 +729,7 @@ def _load_status_df():
             "OrderId":        oid,
             "CustomerPoNo":   d.get("customerpono", ""),
             "Customer":       d.get("Customer name", "").upper().strip(),
+            "CustomerNorm":   d.get("Customer name", "").upper().strip().replace(" ", ""),
             "Item":           d.get("Item", ""),
             "Category":       d.get("Category", ""),
             "Date":           _fmt_date(d.get("Date", "")),
@@ -3344,7 +3345,8 @@ elif menu == "Reports":
         # ── UI ──
         cc1, cc2, cc3 = st.columns([2, 1.5, 1.5])
         with cc1:
-            cust_list = sorted(df_active["Customer"].unique().tolist())
+            # Use normalised names (no spaces) as keys so "RASEEKA IMPEX" == "RASEEKAIMPEX"
+            cust_list = sorted(df_active["CustomerNorm"].unique().tolist())
             sel_cust  = st.selectbox("Select Customer", cust_list, key="cr_cust") if cust_list else None
 
         with cc2:
@@ -3364,7 +3366,7 @@ elif menu == "Reports":
         if sel_cust:
             # Include Dispatched if toggled; otherwise use only active orders
             src_df = df if include_dispatched else df_active
-            cdf = src_df[src_df["Customer"] == sel_cust].copy()
+            cdf = src_df[src_df["CustomerNorm"] == sel_cust].copy()
 
             # Apply date filter
             if date_filter == "This Month":
@@ -3444,7 +3446,7 @@ elif menu == "Reports":
 
         if cp_cust:
             cust_key   = cp_cust.upper().strip().replace(" ", "")
-            cp_df      = pending_df[pending_df["Customer"] == cust_key].sort_values("OrderId", ascending=False)
+            cp_df      = pending_df[pending_df["CustomerNorm"] == cust_key].sort_values("OrderId", ascending=False)
 
             if cp_df.empty:
                 st.info(f"No pending orders for **{cp_cust}**")
