@@ -2114,12 +2114,18 @@ elif menu == "Process Inward":
             st.divider()
 
             # Auto-filled sent details (no key= so value= always reflects selected lot)
+            # Reset colour when lot selection changes
+            _cur_lot_key = selected_lot.get("LotNo","") + "_" + selected_lot.get("OrderId","")
+            if st.session_state.get("_in_last_lot") != _cur_lot_key:
+                st.session_state["_in_last_lot"] = _cur_lot_key
+                st.session_state["in_colour"]    = selected_lot.get("Colour", "")
+
             ac1, ac2 = st.columns(2)
             with ac1:
                 st.text_input("Lot No",    value=selected_lot.get("LotNo", ""),          disabled=True)
                 st.text_input("Order ID",  value=selected_lot.get("OrderId", ""),         disabled=True)
                 st.text_input("Customer",  value=selected_lot.get("Customer name", ""),   disabled=True)
-                st.text_input("Colour",    value=selected_lot.get("Colour", ""),          disabled=True)
+                colour_in = st.text_input("Colour", key="in_colour")
                 st.text_input("Process",   value=selected_lot.get("Process", ""),         disabled=True)
             with ac2:
                 st.text_input("Sent Roll", value=str(selected_lot.get("Roll", "")),       disabled=True)
@@ -2165,7 +2171,7 @@ elif menu == "Process Inward":
                         "OrderId":       selected_lot.get("OrderId", ""),
                         "Customer name": selected_lot.get("Customer name", ""),
                         "Item":          selected_lot.get("Item", ""),
-                        "Colour":        selected_lot.get("Colour", ""),
+                        "Colour":        colour_in.strip(),
                         "Process":       selected_lot.get("Process", ""),
                         "SentRoll":      int(selected_lot.get("Roll", 0) or 0),
                         "SentQty":       float(selected_lot.get("Qnty", 0) or 0),
