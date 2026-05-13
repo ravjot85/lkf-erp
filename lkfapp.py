@@ -2133,22 +2133,18 @@ elif menu == "Process Inward":
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
-            # Total sent for this Lot No + Item combination
-            _item_sel = selected_lot.get("Item", "")
-            _all_out  = [d.to_dict() for d in
-                         db.collection("process_out").where("LotNo","==",lot_no_sel).stream()
-                         if d.to_dict().get("Item","") == _item_sel]
-            total_sent_lot  = sum(float(d.get("Qnty",0) or 0) for d in _all_out)
-            total_sent_roll = sum(int(d.get("Roll",0)  or 0) for d in _all_out)
+            # Sent qty: use this specific process_out entry directly (stable, no item-match issue)
+            total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
+            total_sent_roll = int(selected_lot.get("Roll", 0)  or 0)
 
-            # Total already received for this Lot No + Item combination
-            _all_in   = [d.to_dict() for d in
-                         db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()
-                         if d.to_dict().get("Item","") == _item_sel]
-            total_recv_lot  = sum(float(d.get("ReceivedQty",0)  or 0) for d in _all_in)
+            # Total already received: aggregate all inward records for this LotNo
+            # (do not filter by Item — Item text may differ slightly between collections)
+            _all_in        = [d.to_dict() for d in
+                              db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()]
+            total_recv_lot  = round(sum(float(d.get("ReceivedQty",0)  or 0) for d in _all_in), 3)
             total_recv_roll = sum(int(d.get("ReceivedRoll",0) or 0) for d in _all_in)
-            pending_qty     = round(total_sent_lot - total_recv_lot, 3)
-            pending_roll    = total_sent_roll - total_recv_roll
+            pending_qty     = round(max(total_sent_lot - total_recv_lot, 0), 3)
+            pending_roll    = max(total_sent_roll - total_recv_roll, 0)
 
             # Show pending info
             if total_recv_lot > 0:
