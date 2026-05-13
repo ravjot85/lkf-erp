@@ -2113,58 +2113,80 @@ elif menu == "Process Inward":
 
             st.divider()
 
-            # Auto-filled sent details (no key= so value= always reflects selected lot)
-            # Reset colour when lot selection changes
-            _cur_lot_key = selected_lot.get("LotNo","") + "_" + selected_lot.get("OrderId","")
+            # ── Compute total sent / already received / pending for this Lot No ──
+            lot_no_sel = selected_lot.get("LotNo", "")
+            _cur_lot_key = lot_no_sel + "_" + selected_lot.get("OrderId","")
             if st.session_state.get("_in_last_lot") != _cur_lot_key:
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
+            # Total sent across ALL process_out entries for this Lot No
+            _all_out  = [d.to_dict() for d in
+                         db.collection("process_out").where("LotNo","==",lot_no_sel).stream()]
+            total_sent_lot  = sum(float(d.get("Qnty",0) or 0) for d in _all_out)
+            total_sent_roll = sum(int(d.get("Roll",0)  or 0) for d in _all_out)
+
+            # Total already received across ALL process_inward entries for this Lot No
+            _all_in   = [d.to_dict() for d in
+                         db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()]
+            total_recv_lot  = sum(float(d.get("ReceivedQty",0)  or 0) for d in _all_in)
+            total_recv_roll = sum(int(d.get("ReceivedRoll",0) or 0) for d in _all_in)
+            pending_qty     = round(total_sent_lot - total_recv_lot, 3)
+            pending_roll    = total_sent_roll - total_recv_roll
+
+            # Show pending info
+            if total_recv_lot > 0:
+                st.info(
+                    f"**Lot {lot_no_sel}** — "
+                    f"Total Sent: **{total_sent_lot} kg / {total_sent_roll} rolls**  |  "
+                    f"Already Received: **{total_recv_lot} kg / {total_recv_roll} rolls**  |  "
+                    f"Pending at Processor: **{pending_qty} kg / {pending_roll} rolls**"
+                )
+            else:
+                st.info(f"**Lot {lot_no_sel}** — Total Sent: **{total_sent_lot} kg / {total_sent_roll} rolls** | No receipts yet")
+
             ac1, ac2 = st.columns(2)
             with ac1:
-                st.text_input("Lot No",    value=selected_lot.get("LotNo", ""),          disabled=True)
-                st.text_input("Order ID",  value=selected_lot.get("OrderId", ""),         disabled=True)
-                st.text_input("Customer",  value=selected_lot.get("Customer name", ""),   disabled=True)
+                st.text_input("Lot No",    value=lot_no_sel,                                disabled=True)
+                st.text_input("Order ID",  value=selected_lot.get("OrderId", ""),            disabled=True)
+                st.text_input("Customer",  value=selected_lot.get("Customer name", ""),      disabled=True)
                 colour_in = st.text_input("Colour", key="in_colour")
-                st.text_input("Process",   value=selected_lot.get("Process", ""),         disabled=True)
+                st.text_input("Process",   value=selected_lot.get("Process", ""),            disabled=True)
             with ac2:
-                st.text_input("Sent Roll", value=str(selected_lot.get("Roll", "")),       disabled=True)
-                st.text_input("Sent Qty",  value=str(selected_lot.get("Qnty", "")),       disabled=True)
+                st.text_input("Pending Roll", value=str(pending_roll), disabled=True)
+                st.text_input("Pending Qty",  value=str(pending_qty),  disabled=True)
 
                 recv_roll = st.number_input("Received Roll", min_value=0,   value=None, placeholder="0",    key="in_recv_roll")
                 recv_qty  = st.number_input("Received Qty",  min_value=0.0, value=None, placeholder="0.00", step=0.5, key="in_recv_qty")
                 rate      = st.number_input("Rate (optional)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="in_rate")
                 remarks   = st.text_input("Remarks (optional)", key="in_remarks")
 
-                # Auto-calculated
-                sent_qty_val = float(selected_lot.get("Qnty", 0) or 0)
+                # Auto-calculated against pending
                 recv_qty_val = float(recv_qty or 0)
                 rate_val     = float(rate or 0)
-                short_qty    = round(sent_qty_val - recv_qty_val, 3)
-                short_pct    = round((short_qty / sent_qty_val) * 100, 2) if sent_qty_val > 0 else 0.0
+                short_qty    = round(pending_qty - recv_qty_val, 3)
+                short_pct    = round((short_qty / pending_qty) * 100, 2) if pending_qty > 0 else 0.0
                 amount       = round(recv_qty_val * rate_val, 2)
 
-                # Alert: received > sent
-                if recv_qty_val > sent_qty_val:
-                    st.error(f"⚠️ Received Qty ({recv_qty_val}) is MORE than Sent Qty ({sent_qty_val}). Please recheck.")
+                # Alert: received > pending
+                if recv_qty_val > pending_qty > 0:
+                    st.error(f"⚠️ Received Qty ({recv_qty_val}) exceeds Pending Qty ({pending_qty}). Please recheck.")
 
                 # Shortage display
                 if recv_qty_val > 0 and short_qty > 0:
-                    st.warning(f"📉 Shortage: **{short_qty} kg** &nbsp;|&nbsp; **{short_pct}%** of sent quantity")
-                elif recv_qty_val > 0 and short_qty == 0:
-                    st.success("✅ Full quantity received — no shortage")
+                    st.warning(f"📉 Still pending after this receipt: **{short_qty} kg** &nbsp;|&nbsp; **{short_pct}%**")
+                elif recv_qty_val > 0 and short_qty <= 0:
+                    st.success("✅ Full pending quantity received for this lot")
 
                 sc1, sc2 = st.columns(2)
-                sc1.text_input("Short Qty", value=str(short_qty),  disabled=True)
-                sc2.text_input("Short %",   value=f"{short_pct}%", disabled=True)
-                st.text_input("Amount",     value=str(amount),     disabled=True)
+                sc1.text_input("Short Qty", value=str(max(short_qty,0)), disabled=True)
+                sc2.text_input("Short %",   value=f"{max(short_pct,0)}%", disabled=True)
+                st.text_input("Amount",     value=str(amount),           disabled=True)
 
             if st.button("➕ Add Lot to Challan", key="in_add_lot"):
-                existing = [l["LotNo"] for l in st.session_state.proc_in_lots]
-                if selected_lot["LotNo"] in existing:
-                    st.error("This lot is already added to this challan")
-                elif recv_qty_val > sent_qty_val:
-                    st.error(f"⚠️ Cannot add — Received Qty ({recv_qty_val}) exceeds Sent Qty ({sent_qty_val}). Please correct before adding.")
+                # Removed duplicate lot check — same lot can be received multiple times
+                if recv_qty_val > pending_qty > 0:
+                    st.error(f"⚠️ Cannot add — Received Qty ({recv_qty_val}) exceeds Pending Qty ({pending_qty}).")
                 else:
                     st.session_state.proc_in_lots.append({
                         "LotNo":         selected_lot.get("LotNo", ""),
@@ -2173,8 +2195,8 @@ elif menu == "Process Inward":
                         "Item":          selected_lot.get("Item", ""),
                         "Colour":        colour_in.strip(),
                         "Process":       selected_lot.get("Process", ""),
-                        "SentRoll":      int(selected_lot.get("Roll", 0) or 0),
-                        "SentQty":       float(selected_lot.get("Qnty", 0) or 0),
+                        "SentRoll":      total_sent_roll,
+                        "SentQty":       total_sent_lot,
                         "ReceivedRoll":  int(recv_roll or 0),
                         "ReceivedQty":   float(recv_qty or 0),
                         "ShortQty":      short_qty,
