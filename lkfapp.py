@@ -3436,6 +3436,24 @@ elif menu == "Reports":
 
             st.divider()
 
+            # ── Search / filter ──
+            sf1, sf2 = st.columns(2)
+            with sf1:
+                cr_oid_q = st.text_input("🔍 Filter by Order ID", placeholder="e.g. 1928", key="cr_oid_filter").strip().upper()
+            with sf2:
+                cr_po_q  = st.text_input("🔍 Filter by Customer PO No", placeholder="e.g. PO-123", key="cr_po_filter").strip().upper()
+
+            def _apply_cr_filter(sdf):
+                if cr_oid_q:
+                    sdf = sdf[sdf["OrderId"].astype(str).str.upper().str.contains(cr_oid_q, na=False)]
+                if cr_po_q:
+                    sdf = sdf[sdf["CustomerPoNo"].astype(str).str.upper().str.contains(cr_po_q, na=False)]
+                return sdf
+
+            in_prod_f   = _apply_cr_filter(in_prod_df)
+            pending_f   = _apply_cr_filter(pending_cdf)
+            dispatch_f  = _apply_cr_filter(dispatch_cdf) if include_dispatched else pd.DataFrame()
+
             _base_cols     = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
                               "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
             _prod_cols     = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
@@ -3454,17 +3472,18 @@ elif menu == "Reports":
                     }
                 )
 
-            show_section("IN PRODUCTION", in_prod_df,   _prod_cols)
-            show_section("PENDING",       pending_cdf,   _base_cols)
+            show_section("IN PRODUCTION", in_prod_f,  _prod_cols)
+            show_section("PENDING",       pending_f,  _base_cols)
             if include_dispatched:
-                show_section("DISPATCHED", dispatch_cdf, _base_cols)
+                show_section("DISPATCHED", dispatch_f, _base_cols)
 
             st.divider()
 
             if st.button("📄 Generate Customer Report PDF", type="primary", key="cr_gen"):
-                sections = {"In Production": in_prod_df, "Pending": pending_cdf}
-                if include_dispatched and not dispatch_cdf.empty:
-                    sections["Dispatched"] = dispatch_cdf
+                # PDF uses filtered data so user can generate report for specific orders
+                sections = {"In Production": in_prod_f, "Pending": pending_f}
+                if include_dispatched and not dispatch_f.empty:
+                    sections["Dispatched"] = dispatch_f
                 with st.spinner("Generating PDF..."):
                     try:
                         pdf_bytes = build_customer_report_pdf(sel_cust, date_range_label, sections)
