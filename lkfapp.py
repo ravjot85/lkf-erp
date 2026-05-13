@@ -2107,7 +2107,7 @@ elif menu == "Process Inward":
         if not available_lots:
             st.info("No Process Out lots found for this processor.")
         else:
-            lot_options = [f"{l['LotNo']}  |  Order: {l['OrderId']}  |  {l.get('Colour','')}  |  Sent Qty: {l.get('Qnty','')}" for l in available_lots]
+            lot_options = [f"{l['LotNo']}  |  Order: {l['OrderId']}  |  Item: {l.get('Item','')}  |  {l.get('Colour','')}  |  Sent Qty: {l.get('Qnty','')}" for l in available_lots]
             selected_idx = st.selectbox("Select Lot (from Process Out)", range(len(lot_options)), format_func=lambda i: lot_options[i], key="in_lot_select")
             selected_lot = available_lots[selected_idx]
 
@@ -2120,15 +2120,18 @@ elif menu == "Process Inward":
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
-            # Total sent across ALL process_out entries for this Lot No
+            # Total sent for this Lot No + Item combination
+            _item_sel = selected_lot.get("Item", "")
             _all_out  = [d.to_dict() for d in
-                         db.collection("process_out").where("LotNo","==",lot_no_sel).stream()]
+                         db.collection("process_out").where("LotNo","==",lot_no_sel).stream()
+                         if d.to_dict().get("Item","") == _item_sel]
             total_sent_lot  = sum(float(d.get("Qnty",0) or 0) for d in _all_out)
             total_sent_roll = sum(int(d.get("Roll",0)  or 0) for d in _all_out)
 
-            # Total already received across ALL process_inward entries for this Lot No
+            # Total already received for this Lot No + Item combination
             _all_in   = [d.to_dict() for d in
-                         db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()]
+                         db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()
+                         if d.to_dict().get("Item","") == _item_sel]
             total_recv_lot  = sum(float(d.get("ReceivedQty",0)  or 0) for d in _all_in)
             total_recv_roll = sum(int(d.get("ReceivedRoll",0) or 0) for d in _all_in)
             pending_qty     = round(total_sent_lot - total_recv_lot, 3)
