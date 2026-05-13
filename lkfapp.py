@@ -2098,18 +2098,31 @@ elif menu == "Process Inward":
         # ── Add lot form ──
         st.markdown("#### Add Lot")
 
-        # Fetch process_out lots for selected party
-        available_lots = []
+        # Fetch process_out lots for selected party — store doc_id to avoid
+        # index-order bugs when Firestore returns docs in different order each rerun
+        available_lots = {}   # doc_id → data dict
         if in_party:
-            out_docs = db.collection("process_out").where("PartyName", "==", in_party).stream()
-            available_lots = [doc.to_dict() for doc in out_docs]
+            for doc in db.collection("process_out").where("PartyName", "==", in_party).stream():
+                available_lots[doc.id] = doc.to_dict()
 
         if not available_lots:
             st.info("No Process Out lots found for this processor.")
         else:
-            lot_options = [f"{l['LotNo']}  |  Order: {l['OrderId']}  |  Item: {l.get('Item','')}  |  {l.get('Colour','')}  |  Sent Qty: {l.get('Qnty','')}" for l in available_lots]
-            selected_idx = st.selectbox("Select Lot (from Process Out)", range(len(lot_options)), format_func=lambda i: lot_options[i], key="in_lot_select")
-            selected_lot = available_lots[selected_idx]
+            lot_labels = {
+                doc_id: (
+                    f"{d.get('LotNo','')}  |  Order: {d.get('OrderId','')}  |  "
+                    f"Item: {d.get('Item','')}  |  {d.get('Colour','')}  |  "
+                    f"Sent Qty: {d.get('Qnty','')}"
+                )
+                for doc_id, d in available_lots.items()
+            }
+            selected_doc_id = st.selectbox(
+                "Select Lot (from Process Out)",
+                options=list(lot_labels.keys()),
+                format_func=lambda k: lot_labels[k],
+                key="in_lot_select",
+            )
+            selected_lot = available_lots[selected_doc_id]
 
             st.divider()
 
