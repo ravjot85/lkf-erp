@@ -2566,6 +2566,13 @@ elif menu == "Packing":
             if not pack_po:
                 st.warning("PO not found — Customer Name and Item can be entered manually.")
 
+            # Early duplicate check — warn as soon as Order ID is entered
+            if list(db.collection("PackingListRaw")
+                       .where("OrderId", "==", oid_clean).limit(1).stream()):
+                st.error(f"⚠️ A Packing List for Order **{oid_clean}** already exists. "
+                         f"Use a suffix (e.g. {oid_clean}A) for a new slip, "
+                         f"or use **Edit Packing List** to update the existing one.")
+
         # Reset fields when order changes
         if order_id_in.strip() != st.session_state.pack_last_oid:
             st.session_state.pack_last_oid    = order_id_in.strip()
