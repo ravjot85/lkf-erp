@@ -734,6 +734,7 @@ def _load_status_df():
             "Category":       d.get("Category", ""),
             "Date":           _fmt_date(d.get("Date", "")),
             "ShootDate":      _fmt_date(shoot_dates.get(oid, "")),
+            "DispatchDate":   _fmt_date(max((r.get("Date","") for r in pack_by_base.get(base_oid,[])), default="")),
             "GSM":            int(d.get("gsm") or 0),
             "FabricQty":      po_fabric,
             "FabricPrice":    float(d.get("fabricprice") or 0),
@@ -3320,6 +3321,12 @@ elif menu == "Reports":
                               "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
             _pdf_col_w_base = [2*cm,1.5*cm,2*cm,1.8*cm,3.2*cm,1*cm,1.8*cm,1.6*cm,1.8*cm,1.8*cm,2.2*cm]
 
+            _pdf_cols_disp = ["Date","DispatchDate","OrderId","CustomerPoNo","Category","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","image_url"]
+            _pdf_hdrs_disp = ["PO Date","Dispatch Date","Order ID","Cust PO No","Category","Item","GSM",
+                              "Fabric Qty","Acc Qty","Fabric Price","Acc Price","Image"]
+            _pdf_col_w_disp = [1.8*cm,1.8*cm,1.5*cm,2*cm,1.6*cm,2.8*cm,1*cm,1.6*cm,1.4*cm,1.6*cm,1.6*cm,2*cm]
+
             sec_title_s = ParagraphStyle("st", parent=normal, fontSize=14,
                                          fontName="Helvetica-Bold", spaceAfter=4)
             sec_sub_s   = ParagraphStyle("ss", parent=normal, fontSize=9,
@@ -3351,8 +3358,9 @@ elif menu == "Reports":
                 el.append(Spacer(1, 0.15*cm))
 
                 is_prod   = sec_name == "In Production"
-                tbl_hdrs  = _pdf_hdrs_prod  if is_prod else _pdf_hdrs_base
-                col_w     = _pdf_col_w_prod if is_prod else _pdf_col_w_base
+                is_disp   = sec_name == "Dispatched"
+                tbl_hdrs  = _pdf_hdrs_prod if is_prod else (_pdf_hdrs_disp if is_disp else _pdf_hdrs_base)
+                col_w     = _pdf_col_w_prod if is_prod else (_pdf_col_w_disp if is_disp else _pdf_col_w_base)
 
                 data_rows = [[Paragraph(h, hdr_s) for h in tbl_hdrs]]
                 for _, row in sec_df.sort_values("OrderId", ascending=False).iterrows():
@@ -3375,6 +3383,9 @@ elif menu == "Reports":
                     if is_prod:
                         shoot_cell = Paragraph(str(row.get("ShootDate","") or "—"), cell_s)
                         data_rows.append([base_cells[0], shoot_cell] + base_cells[1:])
+                    elif is_disp:
+                        disp_cell = Paragraph(str(row.get("DispatchDate","") or "—"), cell_s)
+                        data_rows.append([base_cells[0], disp_cell] + base_cells[1:])
                     else:
                         data_rows.append(base_cells)
 
@@ -3470,6 +3481,8 @@ elif menu == "Reports":
                               "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
             _prod_cols     = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
                               "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
+            _disp_cols     = ["Date","DispatchDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
 
             def show_section(label, sdf, cols):
                 if sdf.empty:
@@ -3487,7 +3500,7 @@ elif menu == "Reports":
             show_section("IN PRODUCTION", in_prod_f,  _prod_cols)
             show_section("PENDING",       pending_f,  _base_cols)
             if include_dispatched:
-                show_section("DISPATCHED", dispatch_f, _base_cols)
+                show_section("DISPATCHED", dispatch_f, _disp_cols)
 
             st.divider()
 
