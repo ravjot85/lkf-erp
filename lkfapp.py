@@ -4366,8 +4366,9 @@ elif menu == "Edit PO":
 # ═════════════════════════════════════════════════════════
 elif menu == "Edit Packing List":
     st.markdown('<div class="page-header"><h1>✏️ Edit Packing List</h1></div>', unsafe_allow_html=True)
+    st.caption("Enter the **current (wrong) Order ID** to find the packing list, then edit any field including Order ID.")
 
-    search_oid = st.text_input("Enter Order ID", key="edit_pack_oid")
+    search_oid = st.text_input("Enter Current Order ID", key="edit_pack_oid")
 
     if search_oid.strip():
         pack_docs = list(db.collection("PackingListRaw")
@@ -4375,18 +4376,19 @@ elif menu == "Edit Packing List":
         if not pack_docs:
             st.error("No packing list found for this Order ID")
         else:
-            pack_doc  = pack_docs[0]
-            pack_data = pack_doc.to_dict()
-            raw_id    = pack_doc.id
-
-            st.success(f"Packing List found (Raw ID: {raw_id})")
+            st.success(f"Found {len(pack_docs)} packing slip(s) for Order **{search_oid.strip()}**")
+            # Use first doc for shared fields; all docs will be updated together
+            pack_data = pack_docs[0].to_dict()
 
             ep1, ep2 = st.columns(2)
             with ep1:
-                e_customer = st.text_input("Customer Name",
-                                           value=pack_data.get("Customer name",""), key="epl_cust")
-                e_item     = st.text_input("Item",
-                                           value=pack_data.get("Item",""),          key="epl_item")
+                e_order_id  = st.text_input("Order ID *(editable — to correct wrong order)*",
+                                             value=pack_data.get("OrderId", search_oid.strip()),
+                                             key="epl_oid")
+                e_customer  = st.text_input("Customer Name",
+                                             value=pack_data.get("Customer name",""), key="epl_cust")
+                e_item      = st.text_input("Item",
+                                             value=pack_data.get("Item",""),          key="epl_item")
             with ep2:
                 from datetime import datetime as _epdt, date as _epdate
                 try:
@@ -4404,14 +4406,21 @@ elif menu == "Edit Packing List":
                                     height=100, key="epl_acc")
 
             if st.button("💾 Save Changes", type="primary", key="epl_save"):
-                db.collection("PackingListRaw").document(raw_id).update({
+                new_oid = e_order_id.strip()
+                update_payload = {
+                    "OrderId":          new_oid,
                     "Customer name":    e_customer.strip().upper(),
                     "Item":             e_item.strip(),
                     "Date":             e_pack_date.strftime("%Y-%m-%d"),
                     "FabricDetails":    e_fabric.strip(),
                     "AccessoryDetails": e_acc.strip(),
-                })
-                st.success(f"✅ Packing List for Order {search_oid} updated successfully")
+                }
+                for doc in pack_docs:
+                    db.collection("PackingListRaw").document(doc.id).update(update_payload)
+                if new_oid != search_oid.strip():
+                    st.success(f"✅ Order ID corrected from **{search_oid.strip()}** → **{new_oid}** across {len(pack_docs)} slip(s)")
+                else:
+                    st.success(f"✅ Packing List for Order {new_oid} updated successfully")
 
 
 # ═════════════════════════════════════════════════════════
