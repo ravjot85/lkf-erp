@@ -3260,14 +3260,16 @@ elif menu == "Reports":
             normal  = styles["Normal"]
             el      = []
 
-            # Title
-            el.append(Paragraph("Customer Status Report",
-                                 ParagraphStyle("h", parent=normal, fontSize=18,
-                                                fontName="Helvetica-Bold", spaceAfter=4)))
-            el.append(Paragraph(f"Customer: {customer}",
-                                 ParagraphStyle("sub", parent=normal, fontSize=10, spaceAfter=2)))
-            el.append(Paragraph(f"Date Range: {date_range_label}",
-                                 ParagraphStyle("sub2", parent=normal, fontSize=10, spaceAfter=14)))
+            # Title — use branded banner matching PO/Shoot Order PDFs
+            _pdf_header(el, styles, "CUSTOMER STATUS REPORT")
+            el.append(Paragraph(
+                f"<b>Customer:</b> {customer}",
+                ParagraphStyle("sub", parent=normal, fontSize=11, spaceAfter=3),
+            ))
+            el.append(Paragraph(
+                f"<b>Date Range:</b> {date_range_label}",
+                ParagraphStyle("sub2", parent=normal, fontSize=10, spaceAfter=14),
+            ))
 
             # ── KPI boxes ──
             def kpi_cell(label, count, qty):
