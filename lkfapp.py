@@ -3848,12 +3848,19 @@ elif menu == "Reports":
             out_docs = [d.to_dict() for d in db.collection("process_out").stream()]
             in_docs  = [d.to_dict() for d in db.collection("process_inward").stream()]
 
-        # Lot Nos that have been received back
-        received_lots = {d.get("LotNo","").upper().strip() for d in in_docs}
+        # A lot is "received" only when BOTH LotNo AND PartyName match in process_inward.
+        # This prevents lots re-sent to a different processor from being wrongly excluded.
+        received_pairs = {
+            (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+            for d in in_docs
+        }
 
-        # Filter: process_out lots NOT yet received
-        pending_lots = [d for d in out_docs
-                        if d.get("LotNo","").upper().strip() not in received_lots]
+        # Filter: process_out lots where (LotNo, PartyName) not yet received
+        pending_lots = [
+            d for d in out_docs
+            if (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+            not in received_pairs
+        ]
 
         if not pending_lots:
             st.success("✅ No lots currently pending — all sent lots have been received back.")
