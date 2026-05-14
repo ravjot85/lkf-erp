@@ -3894,6 +3894,11 @@ elif menu == "Reports":
 
             st.divider()
 
+            # Lot No search
+            lot_search = st.text_input("🔍 Search Lot No", placeholder="e.g. 1553F", key="pr_lot_search").strip().upper()
+            if lot_search:
+                pr_df = pr_df[pr_df["LotNo"].astype(str).str.upper().str.contains(lot_search, na=False)]
+
             # Full table
             want = ["ChallanNo", "Date", "PartyName", "OrderId", "LotNo",
                     "Customer name", "Item", "Colour", "Roll", "Qnty", "Process", "DiaGsm"]
