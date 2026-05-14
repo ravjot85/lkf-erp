@@ -2673,6 +2673,11 @@ elif menu == "Packing":
                 st.error("Enter an Order ID")
             elif not f_lines and not a_lines:
                 st.error("Enter at least one colour with weights")
+            elif list(db.collection("PackingListRaw")
+                        .where("OrderId", "==", order_id_in.strip()).limit(1).stream()):
+                st.error(f"⚠️ A Packing List for Order **{order_id_in.strip()}** already exists. "
+                         f"Use a suffix (e.g. {order_id_in.strip()}A) for a new slip, "
+                         f"or use **Edit Packing List** to update the existing one.")
             else:
                 raw_id        = get_next_pack_id()
                 pack_date_str = date.today().strftime("%Y-%m-%d")
