@@ -483,7 +483,7 @@ def _pdf_header(elements, styles, subtitle: str):
     # Navy banner — company name + address
     banner = Table(
         [[Paragraph("LOVELY KNITFAB PVT. LTD.", co_s)],
-         [Paragraph("HB No. 85, Vill. Kasabad, Ludhiana  |  GSTIN: 03AAECL9162H1Z1  |  Ph: 98766-82001", addr_s)]],
+         [Paragraph("HB No. 85, Vill. Kasabad, Ludhiana  |  GSTIN: 03AAECL9162H1ZI  |  Ph: 98766-82001", addr_s)]],
         colWidths=[19*cm],
     )
     banner.setStyle(TableStyle([
@@ -579,10 +579,13 @@ def build_shoot_order_pdf(d: dict, image_bytes: bytes = None) -> bytes:
     elements = []
     _pdf_header(elements, styles, "SHOOT ORDER")
 
+    _cust_name = str(d.get("Customer name", ""))
+    _cust_para = Paragraph(f"<b><u>{_cust_name}</u></b>",
+                           ParagraphStyle("cn", parent=styles["Normal"], fontSize=10))
     rows = [
-        ["Order ID",   str(d.get("OrderId", "")),       "Date",    str(d.get("Date", ""))],
-        ["Customer",   str(d.get("Customer name", "")), "Item",    str(d.get("Item", ""))],
-        ["Category",   str(d.get("Category", "")),      "GSM",     str(d.get("gsm", ""))],
+        ["Order ID",   str(d.get("OrderId", "")),  "Date",    str(d.get("Date", ""))],
+        ["Customer",   _cust_para,                  "Item",    str(d.get("Item", ""))],
+        ["Category",   str(d.get("Category", "")), "GSM",     str(d.get("gsm", ""))],
     ]
     t = Table(rows, colWidths=_TABLE_COL_WIDTHS)
     t.setStyle(_base_table_style())
@@ -1724,7 +1727,7 @@ elif menu == "Process Out":
 
 <div class="lh-box">
   <div>
-    <div>GSTIN No : &nbsp;03AAECL9162H1Z1</div>
+    <div>GSTIN No : &nbsp;03AAECL9162H1ZI</div>
     <div>PAN No &nbsp;&nbsp;&nbsp;: &nbsp;AAECL9162H</div>
   </div>
   <div>Phone : 98766-82001</div>
