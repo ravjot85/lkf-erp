@@ -734,6 +734,7 @@ def _load_status_df():
             "Customer":       d.get("Customer name", "").upper().strip(),
             "CustomerNorm":   d.get("Customer name", "").upper().strip().replace(" ", ""),
             "Item":           d.get("Item", ""),
+            "ItemNorm":       d.get("Item", "").upper().strip().replace(" ", ""),
             "Category":       d.get("Category", ""),
             "Date":           _fmt_date(d.get("Date", "")),
             "ShootDate":      _fmt_date(shoot_dates.get(oid, "")),
@@ -3755,20 +3756,29 @@ elif menu == "Reports":
         # ── Page header ──
         st.markdown("### Pending Orders by Item")
 
-        # Item dropdown from item_master
-        item_list = get_item_list()
-        if not item_list:
-            st.warning("No items in Item Master yet.")
+        # Build item list from normalized values in pending data so
+        # "HB vertical" and "HBvertical" appear as one entry
+        _item_norm_map = {}   # norm_key → display name (first seen)
+        for _it in pending_df["Item"].dropna().unique():
+            _nk = _it.upper().strip().replace(" ", "")
+            if _nk and _nk not in _item_norm_map:
+                _item_norm_map[_nk] = _it.strip()
+        item_list_norm = sorted(_item_norm_map.keys())
+
+        if not item_list_norm:
+            st.info("No pending orders found.")
             st.stop()
 
-        sel_item = st.selectbox(
+        sel_item_norm = st.selectbox(
             "Select Item",
-            ["— select an item —"] + item_list,
+            ["— select an item —"] + item_list_norm,
+            format_func=lambda x: _item_norm_map.get(x, x) if x != "— select an item —" else x,
             key="pir_sel_item"
         )
 
-        if sel_item and sel_item != "— select an item —":
-            item_pend = pending_df[pending_df["Item"].str.upper() == sel_item.upper()].copy()
+        if sel_item_norm and sel_item_norm != "— select an item —":
+            sel_item  = _item_norm_map.get(sel_item_norm, sel_item_norm)  # display name
+            item_pend = pending_df[pending_df["ItemNorm"] == sel_item_norm].copy()
 
             if item_pend.empty:
                 st.info(f"No pending orders for **{sel_item}**")
