@@ -658,7 +658,7 @@ def get_processor_list():
 # ═════════════════════════════════════════════════════════
 #  SHARED: build status dataframe (used by Dashboard + Reports)
 # ═════════════════════════════════════════════════════════
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def _load_status_df():
     po_docs       = [d.to_dict() for d in db.collection("po").stream()]
     shoot_raw     = [d.to_dict() for d in db.collection("shoot_order").stream()]
@@ -821,6 +821,7 @@ if menu == "Dashboard":
     rc1, rc2 = st.columns([6,1])
     with rc2:
         if st.button("🔄 Refresh"):
+            _load_status_df.clear()
             st.rerun()
 
     try:
@@ -2138,16 +2139,20 @@ elif menu == "Process Inward":
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
-            # Sent qty: use this specific process_out entry directly (stable, no item-match issue)
+            # Sent qty: use this specific process_out entry directly
             total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
             total_sent_roll = int(selected_lot.get("Roll", 0)  or 0)
 
-            # Total already received: aggregate all inward records for this LotNo
-            # (do not filter by Item — Item text may differ slightly between collections)
-            _all_in        = [d.to_dict() for d in
-                              db.collection("process_inward").where("LotNo","==",lot_no_sel).stream()]
-            total_recv_lot  = round(sum(float(d.get("ReceivedQty",0)  or 0) for d in _all_in), 3)
-            total_recv_roll = sum(int(d.get("ReceivedRoll",0) or 0) for d in _all_in)
+            # Total already received — cached per LotNo to avoid repeated reads on every rerender
+            @st.cache_data(ttl=120, show_spinner=False)
+            def _get_recv_totals(lot_no):
+                _docs = [d.to_dict() for d in
+                         db.collection("process_inward").where("LotNo","==",lot_no).stream()]
+                return (
+                    round(sum(float(d.get("ReceivedQty",0) or 0) for d in _docs), 3),
+                    sum(int(d.get("ReceivedRoll",0) or 0) for d in _docs),
+                )
+            total_recv_lot, total_recv_roll = _get_recv_totals(lot_no_sel)
             pending_qty     = round(max(total_sent_lot - total_recv_lot, 0), 3)
             pending_roll    = max(total_sent_roll - total_recv_roll, 0)
 
@@ -2994,6 +2999,7 @@ elif menu == "Reports":
 
     st.markdown('<div class="page-header"><h1>📈 Reports</h1></div>', unsafe_allow_html=True)
     if st.button("🔄 Refresh", key="rep_refresh"):
+        _load_status_df.clear()
         st.rerun()
 
     with st.spinner("Loading..."):
@@ -3882,6 +3888,7 @@ elif menu == "Reports":
         st.caption("Orders where Process Out is done but Process Inward has not yet happened.")
 
         if st.button("🔄 Refresh", key="proc_rpt_refresh"):
+            _load_status_df.clear()
             st.rerun()
 
         with st.spinner("Loading..."):
@@ -3965,6 +3972,7 @@ elif menu == "Reports":
         st.caption("Orders where Packing List quantity is less than PO quantity (fabric or accessory).")
 
         if st.button("🔄 Refresh", key="pd_refresh"):
+            _load_status_df.clear()
             st.rerun()
 
         pd_df = df[df["Status"] == "Part Dispatched"].copy()
@@ -4012,6 +4020,7 @@ elif menu == "Reports":
         st.caption("Orders received back from processing and currently in-house for finishing or packing.")
 
         if st.button("🔄 Refresh", key="ih_refresh"):
+            _load_status_df.clear()
             st.rerun()
 
         ih_df = df[df["Status"] == "In House Finishing/Packing"].copy()
@@ -4544,8 +4553,8 @@ elif menu == "Edit Process Out":
     epo_challan = st.text_input("Enter Challan No", key="epo_challan_no")
 
     if epo_challan.strip():
-        po_lots = [doc for doc in db.collection("process_out").stream()
-                   if doc.to_dict().get("ChallanNo","") == epo_challan.strip()]
+        po_lots = [doc for doc in db.collection("process_out")
+                   .where("ChallanNo","==",epo_challan.strip()).stream()]
 
         if not po_lots:
             st.error("No Process Out records found for this Challan No")
