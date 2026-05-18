@@ -2143,16 +2143,20 @@ elif menu == "Process Inward":
             total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
             total_sent_roll = int(selected_lot.get("Roll", 0)  or 0)
 
-            # Total already received — cached per LotNo to avoid repeated reads on every rerender
+            # Total already received — filtered by LotNo AND PartyName so receipts from
+            # a previous processor (e.g. Malhotra) don't count against a new send (e.g. Bhandari)
             @st.cache_data(ttl=120, show_spinner=False)
-            def _get_recv_totals(lot_no):
+            def _get_recv_totals(lot_no, party_name):
+                _party_norm = party_name.upper().strip()
                 _docs = [d.to_dict() for d in
-                         db.collection("process_inward").where("LotNo","==",lot_no).stream()]
+                         db.collection("process_inward").where("LotNo","==",lot_no).stream()
+                         if d.to_dict().get("PartyName","").upper().strip() == _party_norm]
                 return (
                     round(sum(float(d.get("ReceivedQty",0) or 0) for d in _docs), 3),
                     sum(int(d.get("ReceivedRoll",0) or 0) for d in _docs),
                 )
-            total_recv_lot, total_recv_roll = _get_recv_totals(lot_no_sel)
+            _party_for_lot = selected_lot.get("PartyName","")
+            total_recv_lot, total_recv_roll = _get_recv_totals(lot_no_sel, _party_for_lot)
             pending_qty     = round(max(total_sent_lot - total_recv_lot, 0), 3)
             pending_roll    = max(total_sent_roll - total_recv_roll, 0)
 
