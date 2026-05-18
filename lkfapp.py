@@ -1191,6 +1191,30 @@ elif menu == "Customer Master":
             filtered  = [d for d in sorted(docs, key=lambda d: d.id)
                          if cm_search.strip().upper() in d.id.upper()] if cm_search.strip() else sorted(docs, key=lambda d: d.id)
             st.caption(f"Showing {len(filtered)} of {len(docs)} customers")
+            def _cascade_customer_rename(old_name: str, new_name: str) -> int:
+                """Update 'Customer name' in every collection that stores it. Returns total docs updated."""
+                _colls = ["po", "shoot_order", "process_out", "process_inward",
+                          "PackingListRaw", "cancel_orders"]
+                total = 0
+                for coll in _colls:
+                    docs = list(db.collection(coll).where("Customer name", "==", old_name).stream())
+                    if not docs:
+                        continue
+                    # Firestore batch limit = 500 ops
+                    batch = db.batch()
+                    count = 0
+                    for d in docs:
+                        batch.update(d.reference, {"Customer name": new_name})
+                        count += 1
+                        total += 1
+                        if count == 499:
+                            batch.commit()
+                            batch = db.batch()
+                            count = 0
+                    if count:
+                        batch.commit()
+                return total
+
             for doc in filtered:
                 with st.expander(doc.id):
                     ec1, ec2, ec3 = st.columns([3, 1, 1])
@@ -1198,12 +1222,21 @@ elif menu == "Customer Master":
                     if ec2.button("💾 Save", key=f"cm_save_{doc.id}"):
                         new = new_name.strip().upper()
                         if new and new != doc.id:
-                            db.collection("customer_master").document(doc.id).delete()
-                            db.collection("customer_master").document(new).set({"CustomerName": new})
-                            st.success(f"Renamed to {new}")
+                            with st.spinner(f"Renaming {doc.id} → {new} and updating all records..."):
+                                # Rename in customer_master
+                                db.collection("customer_master").document(doc.id).delete()
+                                db.collection("customer_master").document(new).set({"CustomerName": new})
+                                # Cascade to all collections
+                                updated = _cascade_customer_rename(doc.id, new)
+                            get_customer_list.clear()
+                            _load_status_df.clear()
+                            st.success(f"✅ Renamed to **{new}** — updated {updated} records across all collections")
                             st.rerun()
+                        elif new == doc.id:
+                            st.info("Name unchanged")
                     if ec3.button("🗑️ Delete", key=f"cm_del_{doc.id}", type="secondary"):
                         db.collection("customer_master").document(doc.id).delete()
+                        get_customer_list.clear()
                         st.success(f"{doc.id} deleted")
                         st.rerun()
 
@@ -1239,12 +1272,33 @@ elif menu == "Item Master":
                     if ic2.button("💾 Save", key=f"im_save_{doc.id}"):
                         new = new_item.strip().upper()
                         if new and new != doc.id:
-                            db.collection("item_master").document(doc.id).delete()
-                            db.collection("item_master").document(new).set({"ItemName": new})
-                            st.success(f"Renamed to {new}")
+                            with st.spinner(f"Renaming {doc.id} → {new} and updating all records..."):
+                                db.collection("item_master").document(doc.id).delete()
+                                db.collection("item_master").document(new).set({"ItemName": new})
+                                # Cascade Item rename across all collections
+                                _item_colls = ["po","shoot_order","process_out",
+                                               "process_inward","PackingListRaw"]
+                                _item_total = 0
+                                for _ic in _item_colls:
+                                    _idocs = list(db.collection(_ic).where("Item","==",doc.id).stream())
+                                    if _idocs:
+                                        _ib = db.batch()
+                                        _ic2 = 0
+                                        for _d in _idocs:
+                                            _ib.update(_d.reference, {"Item": new})
+                                            _ic2 += 1; _item_total += 1
+                                            if _ic2 == 499:
+                                                _ib.commit(); _ib = db.batch(); _ic2 = 0
+                                        if _ic2: _ib.commit()
+                            get_item_list.clear()
+                            _load_status_df.clear()
+                            st.success(f"✅ Renamed to **{new}** — updated {_item_total} records across all collections")
                             st.rerun()
+                        elif new == doc.id:
+                            st.info("Name unchanged")
                     if ic3.button("🗑️ Delete", key=f"im_del_{doc.id}", type="secondary"):
                         db.collection("item_master").document(doc.id).delete()
+                        get_item_list.clear()
                         st.success(f"{doc.id} deleted")
                         st.rerun()
 
