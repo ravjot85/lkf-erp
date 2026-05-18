@@ -1344,11 +1344,27 @@ elif menu == "Processor Master":
                         new = new_proc.strip().upper()
                         gst = new_gst.strip().upper()
                         if new != doc.id:
-                            db.collection("processor_master").document(doc.id).delete()
-                            db.collection("processor_master").document(new).set({"ProcessorName": new, "GstNo": gst})
+                            with st.spinner(f"Renaming {doc.id} → {new} and updating all records..."):
+                                db.collection("processor_master").document(doc.id).delete()
+                                db.collection("processor_master").document(new).set({"ProcessorName": new, "GstNo": gst})
+                                # Cascade PartyName rename in process_out and process_inward
+                                _proc_total = 0
+                                for _pc in ["process_out", "process_inward"]:
+                                    _pdocs = list(db.collection(_pc).where("PartyName","==",doc.id).stream())
+                                    if _pdocs:
+                                        _pb = db.batch()
+                                        _pc2 = 0
+                                        for _d in _pdocs:
+                                            _pb.update(_d.reference, {"PartyName": new})
+                                            _pc2 += 1; _proc_total += 1
+                                            if _pc2 == 499:
+                                                _pb.commit(); _pb = db.batch(); _pc2 = 0
+                                        if _pc2: _pb.commit()
+                            _load_status_df.clear()
+                            st.success(f"✅ Renamed to **{new}** — updated {_proc_total} records")
                         else:
                             db.collection("processor_master").document(doc.id).update({"GstNo": gst})
-                        st.success("Updated")
+                            st.success("GST No. updated")
                         st.rerun()
                     if pr4.button("🗑️ Delete", key=f"pm_del_{doc.id}", type="secondary"):
                         db.collection("processor_master").document(doc.id).delete()
