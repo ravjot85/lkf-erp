@@ -752,6 +752,41 @@ def _load_status_df():
             "image_url":      d.get("image", ""),
             "Accessory":      d.get("accessory", ""),
         })
+    # Add dispatched rows for PackingListRaw entries that have NO corresponding PO
+    # e.g. OrderId "LK101" dispatched directly without a PO record
+    po_base_oids = {_base_oid(str(d.get("OrderId",""))) for d in po_docs}
+    for base_id, pack_rows in pack_by_base.items():
+        if base_id in po_base_oids:
+            continue  # already handled via the PO loop above
+        first = pack_rows[0]
+        cust  = first.get("Customer name", "").upper().strip()
+        fqty  = sum(_parse_packed_qty(r.get("FabricDetails",""))   for r in pack_rows)
+        aqty  = sum(_parse_packed_qty(r.get("AccessoryDetails","")) for r in pack_rows)
+        rows.append({
+            "OrderId":        first.get("OrderId", base_id),
+            "CustomerPoNo":   "",
+            "Customer":       cust,
+            "CustomerNorm":   cust.replace(" ", ""),
+            "Item":           first.get("Item", ""),
+            "ItemNorm":       first.get("Item", "").upper().strip().replace(" ", ""),
+            "Category":       "",
+            "Date":           _fmt_date(first.get("Date", "")),
+            "ShootDate":      "",
+            "DispatchDate":   _fmt_date(max((r.get("Date","") for r in pack_rows), default="")),
+            "GSM":            0,
+            "FabricQty":      fqty,
+            "FabricPrice":    0.0,
+            "AccQty":         aqty,
+            "AccPrice":       0.0,
+            "PackedFabricQty":fqty,
+            "PackedAccQty":   aqty,
+            "Status":         "Dispatched",
+            "pdf_url":        first.get("pdf_url", ""),
+            "image_drive_id": "",
+            "image_url":      "",
+            "Accessory":      "",
+        })
+
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
