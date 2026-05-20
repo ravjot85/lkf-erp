@@ -2267,7 +2267,8 @@ elif menu == "Process Inward":
             for _doc_id, _d in available_lots.items():
                 _lot_entries[_d.get("LotNo","").upper().strip()].append((_doc_id, _d))
             for _lot in _lot_entries:
-                _lot_entries[_lot].sort(key=lambda x: x[1].get("Date",""))
+                # Sort by (Date, doc_id) — doc_id contains challan no, giving stable tiebreak
+                _lot_entries[_lot].sort(key=lambda x: (x[1].get("Date",""), x[0]))
             _pending_ids = set()
             for _lot, _entries in _lot_entries.items():
                 _rem = _recv_pair.get(_lot, 0.0)
@@ -2315,40 +2316,37 @@ elif menu == "Process Inward":
             total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
             total_sent_roll = int(selected_lot.get("Roll",  0) or 0)
 
-            # Compute waterfall receipt credit for this specific entry:
-            # get all process_out entries for (LotNo, Party) sorted oldest-first,
-            # drain received qty through older entries, credit the remainder to this one.
+            # Compute waterfall receipt credit for this specific entry.
+            # Use doc_id as the stable unique identifier — avoids date+qty ambiguity
+            # when two entries share the same date.
             @st.cache_data(ttl=120, show_spinner=False)
-            def _get_waterfall_credit(lot_no, party_name, this_entry_date, this_entry_qnty):
+            def _get_waterfall_credit(lot_no, party_name, this_doc_id):
                 _pn = party_name.upper().strip()
-                # All sent entries for this pair
-                _out = sorted(
-                    [d.to_dict() for d in
-                     db.collection("process_out").where("LotNo","==",lot_no).stream()
-                     if d.to_dict().get("PartyName","").upper().strip() == _pn],
-                    key=lambda x: x.get("Date","")
-                )
+                # Fetch all sent entries with their doc_ids, sort by (Date, doc_id)
+                _raw = [(doc.id, doc.to_dict()) for doc in
+                        db.collection("process_out").where("LotNo","==",lot_no).stream()
+                        if doc.to_dict().get("PartyName","").upper().strip() == _pn]
+                _out = sorted(_raw, key=lambda x: (x[1].get("Date",""), x[0]))
                 # Total received
                 _in  = [d.to_dict() for d in
                         db.collection("process_inward").where("LotNo","==",lot_no).stream()
                         if d.to_dict().get("PartyName","").upper().strip() == _pn]
                 _rem = round(sum(float(d.get("ReceivedQty",0) or 0) for d in _in), 3)
-                # Drain through entries older than this one; credit remainder to this entry
-                for _e in _out:
+                # Drain through entries that come BEFORE this doc in stable order
+                for _doc_id, _e in _out:
+                    if _doc_id == this_doc_id:
+                        break   # reached the selected entry — stop draining
                     _sq = float(_e.get("Qnty",0) or 0)
-                    _ed = _e.get("Date","")
-                    if _ed < this_entry_date or (_ed == this_entry_date and _sq != this_entry_qnty):
-                        if _rem >= _sq:
-                            _rem -= _sq
-                        else:
-                            _rem = 0
+                    if _rem >= _sq:
+                        _rem -= _sq
                     else:
-                        break  # reached this entry; stop draining
-                return round(min(_rem, this_entry_qnty), 3)
+                        _rem = 0
+                return round(min(_rem, float(
+                    next((e.get("Qnty",0) for did, e in _out if did == this_doc_id), 0) or 0
+                )), 3)
 
             _credit     = _get_waterfall_credit(
-                lot_no_sel, _party_for_lot,
-                selected_lot.get("Date",""), total_sent_lot
+                lot_no_sel, _party_for_lot, selected_doc_id
             )
             pending_qty  = round(max(total_sent_lot - _credit, 0), 3)
             pending_roll = max(total_sent_roll - 0, 0)  # rolls: show full sent roll count
@@ -4089,7 +4087,8 @@ elif menu == "Reports":
             st.rerun()
 
         with st.spinner("Loading..."):
-            out_docs = [d.to_dict() for d in db.collection("process_out").stream()]
+            # Keep doc_id for stable sort tiebreaking
+            out_docs = [(doc.id, doc.to_dict()) for doc in db.collection("process_out").stream()]
             in_docs  = [d.to_dict() for d in db.collection("process_inward").stream()]
 
         # Aggregate total RECEIVED qty per (LotNo, PartyName)
@@ -4098,21 +4097,20 @@ elif menu == "Reports":
             key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
             recv_by_pair[key] = recv_by_pair.get(key, 0.0) + float(d.get("ReceivedQty", 0) or 0)
 
-        # Group process_out entries by (LotNo, PartyName), sorted oldest-first
-        # Waterfall: received qty fills the oldest sends first. An entry is pending
-        # only if it hasn't been fully covered by accumulated receipts.
+        # Group process_out entries by (LotNo, PartyName), sorted by (Date, doc_id)
+        # doc_id tiebreaker ensures deterministic order when entries share the same date.
         from collections import defaultdict
         pair_entries = defaultdict(list)
-        for d in out_docs:
+        for _doc_id, d in out_docs:
             key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
-            pair_entries[key].append(d)
+            pair_entries[key].append((_doc_id, d))
         for key in pair_entries:
-            pair_entries[key].sort(key=lambda x: x.get("Date",""))
+            pair_entries[key].sort(key=lambda x: (x[1].get("Date",""), x[0]))
 
         pending_lots = []
         for key, entries in pair_entries.items():
             remaining = recv_by_pair.get(key, 0.0)
-            for entry in entries:
+            for _doc_id, entry in entries:
                 sent = float(entry.get("Qnty", 0) or 0)
                 if remaining >= sent:
                     remaining -= sent      # this send fully covered — not pending
