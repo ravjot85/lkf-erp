@@ -4020,22 +4020,27 @@ elif menu == "Reports":
             key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
             recv_by_pair[key] = recv_by_pair.get(key, 0.0) + float(d.get("ReceivedQty", 0) or 0)
 
-        # Aggregate total SENT qty per (LotNo, PartyName)
-        sent_by_pair = {}
+        # Group process_out entries by (LotNo, PartyName), sorted oldest-first
+        # Waterfall: received qty fills the oldest sends first. An entry is pending
+        # only if it hasn't been fully covered by accumulated receipts.
+        from collections import defaultdict
+        pair_entries = defaultdict(list)
         for d in out_docs:
             key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
-            sent_by_pair[key] = sent_by_pair.get(key, 0.0) + float(d.get("Qnty", 0) or 0)
+            pair_entries[key].append(d)
+        for key in pair_entries:
+            pair_entries[key].sort(key=lambda x: x.get("Date",""))
 
-        # A process_out entry is pending if total received < total sent for its (lot, party) pair.
-        # This correctly handles same lot sent multiple times to same processor.
-        pending_lots = [
-            d for d in out_docs
-            if recv_by_pair.get(
-                (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip()), 0
-            ) < sent_by_pair.get(
-                (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip()), 0
-            )
-        ]
+        pending_lots = []
+        for key, entries in pair_entries.items():
+            remaining = recv_by_pair.get(key, 0.0)
+            for entry in entries:
+                sent = float(entry.get("Qnty", 0) or 0)
+                if remaining >= sent:
+                    remaining -= sent      # this send fully covered — not pending
+                else:
+                    pending_lots.append(entry)   # still outstanding
+                    remaining = 0          # no receipt qty left for subsequent entries
 
         if not pending_lots:
             st.success("✅ No lots currently pending — all sent lots have been received back.")
