@@ -2307,6 +2307,8 @@ elif menu == "Process Inward":
                     if _sent in _recv_pool_copy:
                         _recv_pool_copy.remove(_sent)
                         _exact_covered.add(_doc_id)
+                        # Remove sentinel so final filter excludes this covered entry
+                        _pending_ids.discard(_doc_id + "__needs_waterfall")
 
                 # Step 2: remaining receipts use waterfall for non-exact entries
                 _entries_no_exact = [e for e in _entries if e[0] not in _exact_covered]
