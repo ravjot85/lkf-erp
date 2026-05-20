@@ -2216,6 +2216,35 @@ elif menu == "Process Inward":
             for doc in db.collection("process_out").where("PartyName", "==", in_party).stream():
                 available_lots[doc.id] = doc.to_dict()
 
+        # Apply same waterfall logic as Processing Report:
+        # exclude entries already fully covered by received qty for their (LotNo, PartyName) pair
+        if available_lots:
+            from collections import defaultdict as _dd2
+            # Total received per (LotNo, PartyName) for this party
+            _in_docs = [d.to_dict() for d in
+                        db.collection("process_inward").where("PartyName","==",in_party).stream()]
+            _recv_pair = {}
+            for _d in _in_docs:
+                _k = _d.get("LotNo","").upper().strip()
+                _recv_pair[_k] = _recv_pair.get(_k, 0.0) + float(_d.get("ReceivedQty",0) or 0)
+            # Sort entries per LotNo by date, waterfall-fill with received qty
+            _lot_entries = _dd2(list)
+            for _doc_id, _d in available_lots.items():
+                _lot_entries[_d.get("LotNo","").upper().strip()].append((_doc_id, _d))
+            for _lot in _lot_entries:
+                _lot_entries[_lot].sort(key=lambda x: x[1].get("Date",""))
+            _pending_ids = set()
+            for _lot, _entries in _lot_entries.items():
+                _rem = _recv_pair.get(_lot, 0.0)
+                for _doc_id, _d in _entries:
+                    _sent = float(_d.get("Qnty",0) or 0)
+                    if _rem >= _sent:
+                        _rem -= _sent   # fully received — skip
+                    else:
+                        _pending_ids.add(_doc_id)
+                        _rem = 0
+            available_lots = {k: v for k, v in available_lots.items() if k in _pending_ids}
+
         if not available_lots:
             st.info("No Process Out lots found for this processor.")
         else:
