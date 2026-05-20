@@ -2283,16 +2283,36 @@ elif menu == "Process Inward":
                     # Legacy record — no reference, fall back to waterfall below
                     _pending_ids.add(_doc_id + "__needs_waterfall")
 
-            # Waterfall pass for legacy (no ProcessOutDocId) entries
+            # Legacy fallback: exact-qty match first, then waterfall for remainder
             _legacy_lots = _dd2(list)
             for _doc_id, _d in available_lots.items():
                 if (_doc_id + "__needs_waterfall") in _pending_ids:
                     _legacy_lots[_d.get("LotNo","").upper().strip()].append((_doc_id, _d))
-            for _lot in _legacy_lots:
-                _legacy_lots[_lot].sort(key=lambda x: (x[1].get("Date",""), x[0]))
+
             for _lot, _entries in _legacy_lots.items():
-                _rem = _recv_by_lot.get(_lot, 0.0)
+                # Collect all legacy received quantities for this lot as a pool
+                _recv_pool = []
+                for _d2 in _in_docs:
+                    if (_d2.get("LotNo","").upper().strip() == _lot
+                            and not _d2.get("ProcessOutDocId","").strip()):
+                        _rv = float(_d2.get("ReceivedQty",0) or 0)
+                        if _rv > 0:
+                            _recv_pool.append(_rv)
+
+                # Step 1: exact-qty match — consume receipts that equal an entry's sent qty
+                _recv_pool_copy = list(_recv_pool)
+                _exact_covered  = set()
                 for _doc_id, _d in _entries:
+                    _sent = float(_d.get("Qnty",0) or 0)
+                    if _sent in _recv_pool_copy:
+                        _recv_pool_copy.remove(_sent)
+                        _exact_covered.add(_doc_id)
+
+                # Step 2: remaining receipts use waterfall for non-exact entries
+                _entries_no_exact = [e for e in _entries if e[0] not in _exact_covered]
+                _entries_no_exact.sort(key=lambda x: (x[1].get("Date",""), x[0]))
+                _rem = round(sum(_recv_pool_copy), 3)
+                for _doc_id, _d in _entries_no_exact:
                     _sent = float(_d.get("Qnty",0) or 0)
                     if _rem >= _sent:
                         _rem -= _sent
@@ -4141,22 +4161,43 @@ elif menu == "Reports":
         for key in pair_entries:
             pair_entries[key].sort(key=lambda x: (x[1].get("Date",""), x[0]))
 
+        # Build pool of legacy (no ProcessOutDocId) received qtys per (lot,party) pair
+        legacy_recv_pools = {}
+        for d in in_docs:
+            if not d.get("ProcessOutDocId","").strip():
+                key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+                rv  = float(d.get("ReceivedQty",0) or 0)
+                if rv > 0:
+                    legacy_recv_pools.setdefault(key, []).append(rv)
+
         pending_lots = []
         for key, entries in pair_entries.items():
-            waterfall_remaining = recv_by_pair.get(key, 0.0)
+            # Step 1: exact-qty match for legacy entries
+            _pool       = list(legacy_recv_pools.get(key, []))
+            _exact_done = set()
+            for _doc_id, entry in entries:
+                if _doc_id in recv_by_docid:
+                    continue  # handled in step 2
+                sent = float(entry.get("Qnty",0) or 0)
+                if sent in _pool:
+                    _pool.remove(sent)
+                    _exact_done.add(_doc_id)
+
+            # Step 2: per-entry decision
+            _wf_rem = round(sum(_pool), 3)
             for _doc_id, entry in entries:
                 sent = float(entry.get("Qnty", 0) or 0)
                 if _doc_id in recv_by_docid:
-                    # Exact match: this entry has a direct receipt reference
                     if recv_by_docid[_doc_id] < sent:
                         pending_lots.append(entry)
+                elif _doc_id in _exact_done:
+                    pass  # fully received via exact match
                 else:
-                    # Legacy waterfall for entries without ProcessOutDocId reference
-                    if waterfall_remaining >= sent:
-                        waterfall_remaining -= sent
+                    if _wf_rem >= sent:
+                        _wf_rem -= sent
                     else:
                         pending_lots.append(entry)
-                        waterfall_remaining = 0
+                        _wf_rem = 0
 
         if not pending_lots:
             st.success("✅ No lots currently pending — all sent lots have been received back.")
