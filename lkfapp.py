@@ -2381,9 +2381,20 @@ elif menu == "Process Inward":
                         db.collection("process_out").where("LotNo","==",lot_no).stream()
                         if doc.to_dict().get("PartyName","").upper().strip() == _pn]
                 _out = sorted(_raw, key=lambda x: (x[1].get("Date",""), x[0]))
-                _legacy_recv = sum(float(d.get("ReceivedQty",0) or 0) for d in _in
-                                   if not d.get("ProcessOutDocId","").strip())
-                _rem = round(_legacy_recv, 3)
+
+                # Build pool of legacy received qtys, then remove receipts already
+                # claimed by exact-qty match against OTHER entries (not this one)
+                _pool = [float(d.get("ReceivedQty",0) or 0) for d in _in
+                         if not d.get("ProcessOutDocId","").strip()
+                         and float(d.get("ReceivedQty",0) or 0) > 0]
+                for _oid, _e in _out:
+                    if _oid == this_doc_id:
+                        continue  # don't claim against the selected entry itself
+                    _sq = float(_e.get("Qnty",0) or 0)
+                    if _sq in _pool:
+                        _pool.remove(_sq)  # consumed by exact match for this other entry
+
+                _rem = round(sum(_pool), 3)
                 for _doc_id, _e in _out:
                     if _doc_id == this_doc_id:
                         break
