@@ -2251,35 +2251,57 @@ elif menu == "Process Inward":
             for doc in db.collection("process_out").where("PartyName", "==", in_party).stream():
                 available_lots[doc.id] = doc.to_dict()
 
-        # Apply same waterfall logic as Processing Report:
-        # exclude entries already fully covered by received qty for their (LotNo, PartyName) pair
+        # Exclude process_out entries that have been fully received.
+        # If ProcessOutDocId is stored in inward records, use exact matching.
+        # Fall back to waterfall only for legacy records without the reference.
         if available_lots:
             from collections import defaultdict as _dd2
-            # Total received per (LotNo, PartyName) for this party
             _in_docs = [d.to_dict() for d in
                         db.collection("process_inward").where("PartyName","==",in_party).stream()]
-            _recv_pair = {}
+
+            # Received qty keyed by ProcessOutDocId (exact) and by LotNo (fallback)
+            _recv_by_docid = {}
+            _recv_by_lot   = {}
             for _d in _in_docs:
-                _k = _d.get("LotNo","").upper().strip()
-                _recv_pair[_k] = _recv_pair.get(_k, 0.0) + float(_d.get("ReceivedQty",0) or 0)
-            # Sort entries per LotNo by date, waterfall-fill with received qty
-            _lot_entries = _dd2(list)
-            for _doc_id, _d in available_lots.items():
-                _lot_entries[_d.get("LotNo","").upper().strip()].append((_doc_id, _d))
-            for _lot in _lot_entries:
-                # Sort by (Date, doc_id) — doc_id contains challan no, giving stable tiebreak
-                _lot_entries[_lot].sort(key=lambda x: (x[1].get("Date",""), x[0]))
+                _ref = _d.get("ProcessOutDocId","").strip()
+                _qty = float(_d.get("ReceivedQty",0) or 0)
+                _lot = _d.get("LotNo","").upper().strip()
+                if _ref:
+                    _recv_by_docid[_ref] = _recv_by_docid.get(_ref, 0.0) + _qty
+                else:
+                    _recv_by_lot[_lot] = _recv_by_lot.get(_lot, 0.0) + _qty
+
             _pending_ids = set()
-            for _lot, _entries in _lot_entries.items():
-                _rem = _recv_pair.get(_lot, 0.0)
+            for _doc_id, _d in available_lots.items():
+                _sent = float(_d.get("Qnty",0) or 0)
+                _lot  = _d.get("LotNo","").upper().strip()
+                if _doc_id in _recv_by_docid:
+                    # Exact match — has ProcessOutDocId reference
+                    if _recv_by_docid.get(_doc_id, 0) < _sent:
+                        _pending_ids.add(_doc_id)
+                else:
+                    # Legacy record — no reference, fall back to waterfall below
+                    _pending_ids.add(_doc_id + "__needs_waterfall")
+
+            # Waterfall pass for legacy (no ProcessOutDocId) entries
+            _legacy_lots = _dd2(list)
+            for _doc_id, _d in available_lots.items():
+                if (_doc_id + "__needs_waterfall") in _pending_ids:
+                    _legacy_lots[_d.get("LotNo","").upper().strip()].append((_doc_id, _d))
+            for _lot in _legacy_lots:
+                _legacy_lots[_lot].sort(key=lambda x: (x[1].get("Date",""), x[0]))
+            for _lot, _entries in _legacy_lots.items():
+                _rem = _recv_by_lot.get(_lot, 0.0)
                 for _doc_id, _d in _entries:
                     _sent = float(_d.get("Qnty",0) or 0)
                     if _rem >= _sent:
-                        _rem -= _sent   # fully received — skip
+                        _rem -= _sent
                     else:
                         _pending_ids.add(_doc_id)
                         _rem = 0
-            available_lots = {k: v for k, v in available_lots.items() if k in _pending_ids}
+
+            available_lots = {k: v for k, v in available_lots.items()
+                              if k in _pending_ids or (k + "__needs_waterfall") in _pending_ids}
 
         if not available_lots:
             st.info("No Process Out lots found for this processor.")
@@ -2320,33 +2342,38 @@ elif menu == "Process Inward":
             # Use doc_id as the stable unique identifier — avoids date+qty ambiguity
             # when two entries share the same date.
             @st.cache_data(ttl=120, show_spinner=False)
-            def _get_waterfall_credit(lot_no, party_name, this_doc_id):
+            def _get_waterfall_credit(lot_no, party_name, this_doc_id, this_sent_qty):
                 _pn = party_name.upper().strip()
-                # Fetch all sent entries with their doc_ids, sort by (Date, doc_id)
+                _in  = [d.to_dict() for d in
+                        db.collection("process_inward").where("LotNo","==",lot_no).stream()
+                        if d.to_dict().get("PartyName","").upper().strip() == _pn]
+
+                # Exact match: sum receipts that reference this specific process_out doc
+                _exact = sum(float(d.get("ReceivedQty",0) or 0) for d in _in
+                             if d.get("ProcessOutDocId","").strip() == this_doc_id)
+                if _exact > 0:
+                    return round(min(_exact, this_sent_qty), 3)
+
+                # Legacy fallback: waterfall using sorted process_out entries
                 _raw = [(doc.id, doc.to_dict()) for doc in
                         db.collection("process_out").where("LotNo","==",lot_no).stream()
                         if doc.to_dict().get("PartyName","").upper().strip() == _pn]
                 _out = sorted(_raw, key=lambda x: (x[1].get("Date",""), x[0]))
-                # Total received
-                _in  = [d.to_dict() for d in
-                        db.collection("process_inward").where("LotNo","==",lot_no).stream()
-                        if d.to_dict().get("PartyName","").upper().strip() == _pn]
-                _rem = round(sum(float(d.get("ReceivedQty",0) or 0) for d in _in), 3)
-                # Drain through entries that come BEFORE this doc in stable order
+                _legacy_recv = sum(float(d.get("ReceivedQty",0) or 0) for d in _in
+                                   if not d.get("ProcessOutDocId","").strip())
+                _rem = round(_legacy_recv, 3)
                 for _doc_id, _e in _out:
                     if _doc_id == this_doc_id:
-                        break   # reached the selected entry — stop draining
+                        break
                     _sq = float(_e.get("Qnty",0) or 0)
                     if _rem >= _sq:
                         _rem -= _sq
                     else:
                         _rem = 0
-                return round(min(_rem, float(
-                    next((e.get("Qnty",0) for did, e in _out if did == this_doc_id), 0) or 0
-                )), 3)
+                return round(min(_rem, this_sent_qty), 3)
 
             _credit     = _get_waterfall_credit(
-                lot_no_sel, _party_for_lot, selected_doc_id
+                lot_no_sel, _party_for_lot, selected_doc_id, total_sent_lot
             )
             pending_qty  = round(max(total_sent_lot - _credit, 0), 3)
             pending_roll = max(total_sent_roll - 0, 0)  # rolls: show full sent roll count
@@ -2406,21 +2433,22 @@ elif menu == "Process Inward":
                     st.error(f"⚠️ Cannot add — Received Qty ({recv_qty_val}) exceeds Pending Qty ({pending_qty}).")
                 else:
                     st.session_state.proc_in_lots.append({
-                        "LotNo":         selected_lot.get("LotNo", ""),
-                        "OrderId":       selected_lot.get("OrderId", ""),
-                        "Customer name": selected_lot.get("Customer name", ""),
-                        "Item":          selected_lot.get("Item", ""),
-                        "Colour":        colour_in.strip(),
-                        "Process":       selected_lot.get("Process", ""),
-                        "SentRoll":      total_sent_roll,
-                        "SentQty":       total_sent_lot,
-                        "ReceivedRoll":  int(recv_roll or 0),
-                        "ReceivedQty":   float(recv_qty or 0),
-                        "ShortQty":      short_qty,
-                        "ShortPct":      short_pct,
-                        "Rate":          rate_val,
-                        "Amount":        amount,
-                        "Remarks":       remarks.strip(),
+                        "LotNo":            selected_lot.get("LotNo", ""),
+                        "OrderId":          selected_lot.get("OrderId", ""),
+                        "Customer name":    selected_lot.get("Customer name", ""),
+                        "Item":             selected_lot.get("Item", ""),
+                        "Colour":           colour_in.strip(),
+                        "Process":          selected_lot.get("Process", ""),
+                        "SentRoll":         total_sent_roll,
+                        "SentQty":          total_sent_lot,
+                        "ReceivedRoll":     int(recv_roll or 0),
+                        "ReceivedQty":      float(recv_qty or 0),
+                        "ShortQty":         short_qty,
+                        "ShortPct":         short_pct,
+                        "Rate":             rate_val,
+                        "Amount":           amount,
+                        "Remarks":          remarks.strip(),
+                        "ProcessOutDocId":  selected_doc_id,  # links to exact process_out entry
                     })
                     st.rerun()
 
@@ -4091,11 +4119,17 @@ elif menu == "Reports":
             out_docs = [(doc.id, doc.to_dict()) for doc in db.collection("process_out").stream()]
             in_docs  = [d.to_dict() for d in db.collection("process_inward").stream()]
 
-        # Aggregate total RECEIVED qty per (LotNo, PartyName)
-        recv_by_pair = {}
+        # Received qty keyed by ProcessOutDocId (exact) and by (LotNo,PartyName) (legacy fallback)
+        recv_by_docid = {}
+        recv_by_pair  = {}
         for d in in_docs:
-            key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
-            recv_by_pair[key] = recv_by_pair.get(key, 0.0) + float(d.get("ReceivedQty", 0) or 0)
+            _ref = d.get("ProcessOutDocId","").strip()
+            _qty = float(d.get("ReceivedQty",0) or 0)
+            if _ref:
+                recv_by_docid[_ref] = recv_by_docid.get(_ref, 0.0) + _qty
+            else:
+                key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+                recv_by_pair[key] = recv_by_pair.get(key, 0.0) + _qty
 
         # Group process_out entries by (LotNo, PartyName), sorted by (Date, doc_id)
         # doc_id tiebreaker ensures deterministic order when entries share the same date.
@@ -4109,14 +4143,20 @@ elif menu == "Reports":
 
         pending_lots = []
         for key, entries in pair_entries.items():
-            remaining = recv_by_pair.get(key, 0.0)
+            waterfall_remaining = recv_by_pair.get(key, 0.0)
             for _doc_id, entry in entries:
                 sent = float(entry.get("Qnty", 0) or 0)
-                if remaining >= sent:
-                    remaining -= sent      # this send fully covered — not pending
+                if _doc_id in recv_by_docid:
+                    # Exact match: this entry has a direct receipt reference
+                    if recv_by_docid[_doc_id] < sent:
+                        pending_lots.append(entry)
                 else:
-                    pending_lots.append(entry)   # still outstanding
-                    remaining = 0          # no receipt qty left for subsequent entries
+                    # Legacy waterfall for entries without ProcessOutDocId reference
+                    if waterfall_remaining >= sent:
+                        waterfall_remaining -= sent
+                    else:
+                        pending_lots.append(entry)
+                        waterfall_remaining = 0
 
         if not pending_lots:
             st.success("✅ No lots currently pending — all sent lots have been received back.")
