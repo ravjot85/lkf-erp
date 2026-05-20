@@ -2273,47 +2273,61 @@ elif menu == "Process Inward":
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
-            # Resolve party name first — used by both sent and recv lookups
+            # Resolve party name first
             _party_for_lot = selected_lot.get("PartyName","")
 
-            # Sent qty: aggregate ALL process_out entries for this (LotNo, PartyName) pair
-            @st.cache_data(ttl=120, show_spinner=False)
-            def _get_sent_totals(lot_no, party_name):
-                _party_norm = party_name.upper().strip()
-                _docs = [d.to_dict() for d in
-                         db.collection("process_out").where("LotNo","==",lot_no).stream()
-                         if d.to_dict().get("PartyName","").upper().strip() == _party_norm]
-                return (
-                    round(sum(float(d.get("Qnty",0) or 0) for d in _docs), 3),
-                    sum(int(d.get("Roll",0) or 0) for d in _docs),
-                )
-            total_sent_lot, total_sent_roll = _get_sent_totals(lot_no_sel, _party_for_lot)
+            # This entry's specific sent qty (not aggregated)
+            total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
+            total_sent_roll = int(selected_lot.get("Roll",  0) or 0)
 
-            # Total already received for this (LotNo, PartyName) pair
+            # Compute waterfall receipt credit for this specific entry:
+            # get all process_out entries for (LotNo, Party) sorted oldest-first,
+            # drain received qty through older entries, credit the remainder to this one.
             @st.cache_data(ttl=120, show_spinner=False)
-            def _get_recv_totals(lot_no, party_name):
-                _party_norm = party_name.upper().strip()
-                _docs = [d.to_dict() for d in
-                         db.collection("process_inward").where("LotNo","==",lot_no).stream()
-                         if d.to_dict().get("PartyName","").upper().strip() == _party_norm]
-                return (
-                    round(sum(float(d.get("ReceivedQty",0) or 0) for d in _docs), 3),
-                    sum(int(d.get("ReceivedRoll",0) or 0) for d in _docs),
+            def _get_waterfall_credit(lot_no, party_name, this_entry_date, this_entry_qnty):
+                _pn = party_name.upper().strip()
+                # All sent entries for this pair
+                _out = sorted(
+                    [d.to_dict() for d in
+                     db.collection("process_out").where("LotNo","==",lot_no).stream()
+                     if d.to_dict().get("PartyName","").upper().strip() == _pn],
+                    key=lambda x: x.get("Date","")
                 )
-            total_recv_lot, total_recv_roll = _get_recv_totals(lot_no_sel, _party_for_lot)
-            pending_qty     = round(max(total_sent_lot - total_recv_lot, 0), 3)
-            pending_roll    = max(total_sent_roll - total_recv_roll, 0)
+                # Total received
+                _in  = [d.to_dict() for d in
+                        db.collection("process_inward").where("LotNo","==",lot_no).stream()
+                        if d.to_dict().get("PartyName","").upper().strip() == _pn]
+                _rem = round(sum(float(d.get("ReceivedQty",0) or 0) for d in _in), 3)
+                # Drain through entries older than this one; credit remainder to this entry
+                for _e in _out:
+                    _sq = float(_e.get("Qnty",0) or 0)
+                    _ed = _e.get("Date","")
+                    if _ed < this_entry_date or (_ed == this_entry_date and _sq != this_entry_qnty):
+                        if _rem >= _sq:
+                            _rem -= _sq
+                        else:
+                            _rem = 0
+                    else:
+                        break  # reached this entry; stop draining
+                return round(min(_rem, this_entry_qnty), 3)
 
-            # Show pending info
-            if total_recv_lot > 0:
+            _credit     = _get_waterfall_credit(
+                lot_no_sel, _party_for_lot,
+                selected_lot.get("Date",""), total_sent_lot
+            )
+            pending_qty  = round(max(total_sent_lot - _credit, 0), 3)
+            pending_roll = max(total_sent_roll - 0, 0)  # rolls: show full sent roll count
+
+            # Show pending info for this specific entry
+            if _credit > 0:
                 st.info(
                     f"**Lot {lot_no_sel}** — "
-                    f"Total Sent: **{total_sent_lot} kg / {total_sent_roll} rolls**  |  "
-                    f"Already Received: **{total_recv_lot} kg / {total_recv_roll} rolls**  |  "
-                    f"Pending at Processor: **{pending_qty} kg / {pending_roll} rolls**"
+                    f"This Entry Sent: **{total_sent_lot} kg**  |  "
+                    f"Already allocated: **{_credit} kg**  |  "
+                    f"Pending: **{pending_qty} kg**"
                 )
             else:
-                st.info(f"**Lot {lot_no_sel}** — Total Sent: **{total_sent_lot} kg / {total_sent_roll} rolls** | No receipts yet")
+                st.info(f"**Lot {lot_no_sel}** — Sent: **{total_sent_lot} kg** | Fully pending (no receipts yet)")
 
             ac1, ac2 = st.columns(2)
             with ac1:
