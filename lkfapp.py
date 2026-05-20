@@ -1804,47 +1804,79 @@ elif menu == "Process Out":
 <meta charset="utf-8">
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: Arial, sans-serif; font-size: 10pt; padding: 10mm; color: #111; }}
+  html, body {{ height: 100%; }}
+  body {{
+    font-family: Arial, sans-serif; font-size: 10pt; color: #111;
+    padding: 8mm 10mm;
+    display: flex; flex-direction: column; min-height: 277mm;
+  }}
   .print-btn {{
     background: #1a3c6e; color: white; border: none; padding: 8px 24px;
-    font-size: 11pt; cursor: pointer; border-radius: 4px; margin-bottom: 12px;
+    font-size: 11pt; cursor: pointer; border-radius: 4px; margin-bottom: 10px;
     display: block;
   }}
   @media print {{
-    .print-btn {{ display: none; }}
-    body {{ padding: 5mm; }}
+    .print-btn {{ display: none !important; }}
+    body {{ padding: 6mm 8mm; min-height: 277mm; }}
   }}
-  .lh-box {{ border: 1px solid #333; padding: 5px 10px; display: flex;
-             justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }}
-  .co-name {{ text-align: center; font-size: 14pt; font-weight: bold; margin: 6px 0 2px; }}
-  .co-addr {{ text-align: center; font-size: 10pt; }}
-  .ch-title {{ text-align: center; font-size: 12pt; font-weight: bold;
-               text-decoration: underline; margin: 8px 0 10px; }}
-  .hdr-table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
+
+  /* ── Single border box: GSTIN + company info + challan title ── */
+  .header-box {{
+    border: 1.5px solid #333;
+    margin-bottom: 8px;
+  }}
+  .lh-row {{
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 5px 10px; border-bottom: 1px solid #ccc;
+  }}
+  .co-name {{ text-align: center; font-size: 14pt; font-weight: bold;
+              padding: 5px 0 2px; border-bottom: 1px solid #ccc; }}
+  .co-addr  {{ text-align: center; font-size: 10pt; padding: 1px 0; }}
+  .co-addr-last {{ border-bottom: 1px solid #ccc; padding-bottom: 4px; }}
+  .ch-title {{
+    text-align: center; font-size: 12pt; font-weight: bold;
+    text-decoration: underline; padding: 6px 0;
+  }}
+
+  .hdr-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
   .hdr-table td {{ border: 0.5px solid #999; padding: 4px 6px; font-size: 9.5pt; }}
   .hdr-table td.lbl {{ background: #dce6f7; font-weight: bold; width: 15%; }}
-  .lots-table {{ width: 100%; border-collapse: collapse; font-size: 8.5pt; }}
-  .lots-table th {{ background: #1a3c6e; color: white; padding: 5px 4px;
-                    text-align: left; border: 0.5px solid #666; }}
+
+  /* ── Lots table fills remaining page height ── */
+  .table-wrap {{
+    flex: 1;
+    display: flex; flex-direction: column;
+    border: 1px solid #999;
+  }}
+  .lots-table {{
+    width: 100%; border-collapse: collapse; font-size: 8.5pt;
+    flex: 1;
+  }}
+  .lots-table th {{
+    background: #1a3c6e; color: white; padding: 5px 4px;
+    text-align: left; border: 0.5px solid #666;
+  }}
   .lots-table td {{ border: 0.5px solid #bbb; padding: 4px; vertical-align: top; }}
+  /* Empty filler row to push total to bottom */
+  .lots-table tr.filler td {{ border-left: none; border-right: none; }}
 </style>
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">🖨️ Print Challan</button>
 
-<div class="lh-box">
-  <div>
-    <div>GSTIN No : &nbsp;03AAECL9162H1ZI</div>
-    <div>PAN No &nbsp;&nbsp;&nbsp;: &nbsp;AAECL9162H</div>
+<div class="header-box">
+  <div class="lh-row">
+    <div>
+      <div>GSTIN No : &nbsp;03AAECL9162H1ZI</div>
+      <div>PAN No &nbsp;&nbsp;&nbsp;: &nbsp;AAECL9162H</div>
+    </div>
+    <div>Phone : 98766-82001</div>
   </div>
-  <div>Phone : 98766-82001</div>
+  <div class="co-name">LOVELY KNITFAB PVT LTD</div>
+  <div class="co-addr">HB NO.85, VILL. KASABAD</div>
+  <div class="co-addr co-addr-last">LUDHIANA</div>
+  <div class="ch-title">JOB WORK CHALLAN (OUTWARD)</div>
 </div>
-
-<div class="co-name">LOVELY KNITFAB PVT LTD</div>
-<div class="co-addr">HB NO.85, VILL. KASABAD</div>
-<div class="co-addr">LUDHIANA</div>
-
-<div class="ch-title">JOB WORK CHALLAN (OUTWARD)</div>
 
 <table class="hdr-table">
   <tr>
@@ -1861,6 +1893,7 @@ elif menu == "Process Out":
   </tr>
 </table>
 
+<div class="table-wrap">
 <table class="lots-table">
   <thead>
     <tr>
@@ -1870,9 +1903,11 @@ elif menu == "Process Out":
   </thead>
   <tbody>
     {lot_rows_html}
+    <tr class="filler"><td colspan="9" style="height:100%;"></td></tr>
     {grand_total_row}
   </tbody>
 </table>
+</div>
 </body>
 </html>"""
 
