@@ -2244,9 +2244,19 @@ elif menu == "Process Inward":
                 st.session_state["_in_last_lot"] = _cur_lot_key
                 st.session_state["in_colour"]    = selected_lot.get("Colour", "")
 
-            # Sent qty: use this specific process_out entry directly
-            total_sent_lot  = float(selected_lot.get("Qnty", 0) or 0)
-            total_sent_roll = int(selected_lot.get("Roll", 0)  or 0)
+            # Sent qty: aggregate ALL process_out entries for this (LotNo, PartyName) pair
+            # so that multiple sends of the same lot to the same processor are counted together
+            @st.cache_data(ttl=120, show_spinner=False)
+            def _get_sent_totals(lot_no, party_name):
+                _party_norm = party_name.upper().strip()
+                _docs = [d.to_dict() for d in
+                         db.collection("process_out").where("LotNo","==",lot_no).stream()
+                         if d.to_dict().get("PartyName","").upper().strip() == _party_norm]
+                return (
+                    round(sum(float(d.get("Qnty",0) or 0) for d in _docs), 3),
+                    sum(int(d.get("Roll",0) or 0) for d in _docs),
+                )
+            total_sent_lot, total_sent_roll = _get_sent_totals(lot_no_sel, _party_for_lot)
 
             # Total already received — filtered by LotNo AND PartyName so receipts from
             # a previous processor (e.g. Malhotra) don't count against a new send (e.g. Bhandari)
@@ -4004,18 +4014,27 @@ elif menu == "Reports":
             out_docs = [d.to_dict() for d in db.collection("process_out").stream()]
             in_docs  = [d.to_dict() for d in db.collection("process_inward").stream()]
 
-        # A lot is "received" only when BOTH LotNo AND PartyName match in process_inward.
-        # This prevents lots re-sent to a different processor from being wrongly excluded.
-        received_pairs = {
-            (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
-            for d in in_docs
-        }
+        # Aggregate total RECEIVED qty per (LotNo, PartyName)
+        recv_by_pair = {}
+        for d in in_docs:
+            key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+            recv_by_pair[key] = recv_by_pair.get(key, 0.0) + float(d.get("ReceivedQty", 0) or 0)
 
-        # Filter: process_out lots where (LotNo, PartyName) not yet received
+        # Aggregate total SENT qty per (LotNo, PartyName)
+        sent_by_pair = {}
+        for d in out_docs:
+            key = (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
+            sent_by_pair[key] = sent_by_pair.get(key, 0.0) + float(d.get("Qnty", 0) or 0)
+
+        # A process_out entry is pending if total received < total sent for its (lot, party) pair.
+        # This correctly handles same lot sent multiple times to same processor.
         pending_lots = [
             d for d in out_docs
-            if (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip())
-            not in received_pairs
+            if recv_by_pair.get(
+                (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip()), 0
+            ) < sent_by_pair.get(
+                (d.get("LotNo","").upper().strip(), d.get("PartyName","").upper().strip()), 0
+            )
         ]
 
         if not pending_lots:
