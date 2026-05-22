@@ -1263,7 +1263,6 @@ elif menu == "Customer Master":
                                 db.collection("customer_master").document(new).set({"CustomerName": new})
                                 # Cascade to all collections
                                 updated = _cascade_customer_rename(doc.id, new)
-                            get_customer_list.clear()
                             _load_status_df.clear()
                             st.success(f"✅ Renamed to **{new}** — updated {updated} records across all collections")
                             st.rerun()
@@ -1271,7 +1270,6 @@ elif menu == "Customer Master":
                             st.info("Name unchanged")
                     if ec3.button("🗑️ Delete", key=f"cm_del_{doc.id}", type="secondary"):
                         db.collection("customer_master").document(doc.id).delete()
-                        get_customer_list.clear()
                         st.success(f"{doc.id} deleted")
                         st.rerun()
 
@@ -1325,7 +1323,6 @@ elif menu == "Item Master":
                                             if _ic2 == 499:
                                                 _ib.commit(); _ib = db.batch(); _ic2 = 0
                                         if _ic2: _ib.commit()
-                            get_item_list.clear()
                             _load_status_df.clear()
                             st.success(f"✅ Renamed to **{new}** — updated {_item_total} records across all collections")
                             st.rerun()
@@ -1333,7 +1330,6 @@ elif menu == "Item Master":
                             st.info("Name unchanged")
                     if ic3.button("🗑️ Delete", key=f"im_del_{doc.id}", type="secondary"):
                         db.collection("item_master").document(doc.id).delete()
-                        get_item_list.clear()
                         st.success(f"{doc.id} deleted")
                         st.rerun()
 
