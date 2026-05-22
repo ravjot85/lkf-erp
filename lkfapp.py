@@ -3676,9 +3676,25 @@ elif menu == "Reports":
         # ── UI ──
         cc1, cc2, cc3 = st.columns([2, 1.5, 1.5])
         with cc1:
-            # Use normalised names (no spaces) as keys so "RASEEKA IMPEX" == "RASEEKAIMPEX"
-            cust_list = sorted(df_active["CustomerNorm"].unique().tolist())
-            sel_cust  = st.selectbox("Select Customer", cust_list, key="cr_cust") if cust_list else None
+            # Build norm → display name map from customer_master (preserves spaces)
+            # Normalisation is used only for matching; display shows original spaced name
+            _cm_display = {}
+            for _cm in db.collection("customer_master").stream():
+                _n = _cm.id.upper().strip().replace(" ", "")
+                if _n and _n not in _cm_display:
+                    _cm_display[_n] = _cm.id.upper().strip()
+            # Fill any norms from data that have no master entry
+            for _n in df_active["CustomerNorm"].unique():
+                if _n and _n not in _cm_display:
+                    _matches = df_active[df_active["CustomerNorm"] == _n]["Customer"].unique()
+                    _cm_display[_n] = _matches[0] if len(_matches) > 0 else _n
+
+            cust_list = sorted(_cm_display.keys())
+            sel_cust  = st.selectbox(
+                "Select Customer", cust_list,
+                format_func=lambda k: _cm_display.get(k, k),
+                key="cr_cust",
+            ) if cust_list else None
 
         with cc2:
             date_filter = st.selectbox("Date Range", ["All Dates", "This Month", "Custom"], key="cr_drange")
@@ -3779,8 +3795,9 @@ elif menu == "Reports":
                     sections["Dispatched"] = dispatch_f
                 with st.spinner("Generating PDF..."):
                     try:
-                        pdf_bytes = build_customer_report_pdf(sel_cust, date_range_label, sections)
-                        pdf_name  = f"CustomerReport_{sel_cust.replace(' ','_')}_{date_range_label.replace(' ','_')}.pdf"
+                        _disp_name = _cm_display.get(sel_cust, sel_cust)
+                        pdf_bytes = build_customer_report_pdf(_disp_name, date_range_label, sections)
+                        pdf_name  = f"CustomerReport_{_disp_name.replace(' ','_')}_{date_range_label.replace(' ','_')}.pdf"
                         st.download_button("⬇️ Download Report PDF", pdf_bytes, pdf_name,
                                            "application/pdf", key="cr_dl")
                     except Exception as e:
