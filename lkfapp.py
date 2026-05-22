@@ -365,7 +365,7 @@ with st.sidebar:
             _nav(icon, page, page)
 
     st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    _nav("📥", "Import Data", "Import Data")
+    # Import Data nav hidden — backend code preserved at elif menu == "Import Data"
 
 menu = st.session_state.page
 
