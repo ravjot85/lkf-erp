@@ -1232,7 +1232,7 @@ elif menu == "Customer Master":
                           "PackingListRaw", "cancel_orders"]
                 total = 0
                 for coll in _colls:
-                    docs = list(db.collection(coll).where("Customer name", "==", old_name).stream())
+                    docs = list(db.collection(coll).where("`Customer name`", "==", old_name).stream())
                     if not docs:
                         continue
                     # Firestore batch limit = 500 ops
@@ -1253,7 +1253,9 @@ elif menu == "Customer Master":
             for doc in filtered:
                 with st.expander(doc.id):
                     ec1, ec2, ec3 = st.columns([3, 1, 1])
-                    new_name = ec1.text_input("Name", value=doc.id, key=f"cm_edit_{doc.id}", label_visibility="collapsed")
+                    if f"cm_edit_{doc.id}" not in st.session_state:
+                        st.session_state[f"cm_edit_{doc.id}"] = doc.id
+                    new_name = ec1.text_input("Name", key=f"cm_edit_{doc.id}", label_visibility="collapsed")
                     if ec2.button("💾 Save", key=f"cm_save_{doc.id}"):
                         new = new_name.strip().upper()
                         if new and new != doc.id:
@@ -1301,7 +1303,9 @@ elif menu == "Item Master":
             for doc in filtered:
                 with st.expander(doc.id):
                     ic1, ic2, ic3 = st.columns([3, 1, 1])
-                    new_item = ic1.text_input("Item", value=doc.id, key=f"im_edit_{doc.id}", label_visibility="collapsed")
+                    if f"im_edit_{doc.id}" not in st.session_state:
+                        st.session_state[f"im_edit_{doc.id}"] = doc.id
+                    new_item = ic1.text_input("Item", key=f"im_edit_{doc.id}", label_visibility="collapsed")
                     if ic2.button("💾 Save", key=f"im_save_{doc.id}"):
                         new = new_item.strip().upper()
                         if new and new != doc.id:
