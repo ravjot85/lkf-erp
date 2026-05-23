@@ -751,6 +751,7 @@ def _load_status_df():
             "image_drive_id": d.get("image_drive_id", ""),
             "image_url":      d.get("image", ""),
             "Accessory":      d.get("accessory", ""),
+            "HasPO":          True,
         })
     # Add dispatched rows for PackingListRaw entries that have NO corresponding PO
     # e.g. OrderId "LK101" dispatched directly without a PO record
@@ -785,6 +786,7 @@ def _load_status_df():
             "image_drive_id": "",
             "image_url":      "",
             "Accessory":      "",
+            "HasPO":          False,
         })
 
     return pd.DataFrame(rows) if rows else pd.DataFrame()
@@ -3726,7 +3728,7 @@ elif menu == "Reports":
 
             in_prod_df   = cdf[~cdf["Status"].isin(["Pending","Dispatched","Cancelled"])]
             pending_cdf  = cdf[cdf["Status"] == "Pending"]
-            dispatch_cdf = cdf[cdf["Status"] == "Dispatched"] if include_dispatched else pd.DataFrame()
+            dispatch_cdf = cdf[(cdf["Status"] == "Dispatched") & (cdf["HasPO"] == True)] if include_dispatched else pd.DataFrame()
 
             # KPI tiles
             ck1, ck2, ck3, ck4 = st.columns(4)
