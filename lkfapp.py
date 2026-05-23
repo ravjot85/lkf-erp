@@ -3683,11 +3683,6 @@ elif menu == "Reports":
                 _n = _cm.id.upper().strip().replace(" ", "")
                 if _n and _n not in _cm_display:
                     _cm_display[_n] = _cm.id.upper().strip()
-            # Fill any norms from data that have no master entry
-            for _n in df_active["CustomerNorm"].unique():
-                if _n and _n not in _cm_display:
-                    _matches = df_active[df_active["CustomerNorm"] == _n]["Customer"].unique()
-                    _cm_display[_n] = _matches[0] if len(_matches) > 0 else _n
 
             cust_list = sorted(_cm_display.keys())
             sel_cust  = st.selectbox(
