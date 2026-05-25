@@ -1483,7 +1483,7 @@ elif menu == "PO":
         accessory_qnty = st.number_input("Accessory Qty",min_value=0, value=None, placeholder="0", key=f"po_aqty_{fv}")
 
     with col2:
-        fabric_price          = st.number_input("Fabric Price",    min_value=0, value=None, placeholder="0",                          key=f"po_fprice_{fv}")
+        fabric_price          = st.number_input("Fabric Price",    min_value=0.0, value=None, placeholder="0.00", step=0.01, format="%.2f", key=f"po_fprice_{fv}")
         accessory_price       = st.number_input("Accessory Price", min_value=0, value=None, placeholder="0",                          key=f"po_aprice_{fv}")
         colours_instructions  = st.text_area("Colours Instructions",                                                                   key=f"po_colours_{fv}")
         accessory_desc        = st.text_area("Accessory Description", placeholder="e.g. 500 buttons, 200 labels...",                  key=f"po_acc_{fv}")
