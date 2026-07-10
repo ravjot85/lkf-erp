@@ -1419,19 +1419,18 @@ elif menu == "PO":
     _po_cv1.html("""
     <script>
     (function() {
+        var par = window.parent;
+        // Guard: only install once across all Streamlit reruns
+        if (par._lkfPONavReady) return;
+        par._lkfPONavReady = true;
+
         function getInputs() {
-            return Array.from(window.parent.document.querySelectorAll(
+            return Array.from(par.document.querySelectorAll(
                 'input[type="text"]:not([disabled]), input[type="number"]:not([disabled])'
             ));
         }
         function setupInputs() {
             getInputs().forEach(function(inp) {
-                // Disable spellcheck/autocomplete so browser extensions (Grammarly etc.)
-                // don't inject DOM nodes that break React reconciliation
-                inp.setAttribute('spellcheck', 'false');
-                inp.setAttribute('autocomplete', 'off');
-                inp.setAttribute('autocorrect', 'off');
-                inp.setAttribute('autocapitalize', 'off');
                 if (inp._enterBound) return;
                 inp._enterBound = true;
                 inp.addEventListener('keydown', function(e) {
@@ -1446,8 +1445,14 @@ elif menu == "PO":
                 });
             });
         }
-        var obs = new MutationObserver(setupInputs);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+
+        // Debounce so the observer never fires mid React reconciliation
+        var _t;
+        var obs = new MutationObserver(function() {
+            clearTimeout(_t);
+            _t = setTimeout(setupInputs, 80);
+        });
+        obs.observe(par.document.body, { childList: true, subtree: true });
         setupInputs();
     })();
     </script>
