@@ -1424,8 +1424,14 @@ elif menu == "PO":
                 'input[type="text"]:not([disabled]), input[type="number"]:not([disabled])'
             ));
         }
-        function setupEnterNav() {
+        function setupInputs() {
             getInputs().forEach(function(inp) {
+                // Disable spellcheck/autocomplete so browser extensions (Grammarly etc.)
+                // don't inject DOM nodes that break React reconciliation
+                inp.setAttribute('spellcheck', 'false');
+                inp.setAttribute('autocomplete', 'off');
+                inp.setAttribute('autocorrect', 'off');
+                inp.setAttribute('autocapitalize', 'off');
                 if (inp._enterBound) return;
                 inp._enterBound = true;
                 inp.addEventListener('keydown', function(e) {
@@ -1440,9 +1446,9 @@ elif menu == "PO":
                 });
             });
         }
-        var obs = new MutationObserver(setupEnterNav);
+        var obs = new MutationObserver(setupInputs);
         obs.observe(window.parent.document.body, { childList: true, subtree: true });
-        setupEnterNav();
+        setupInputs();
     })();
     </script>
     """, height=0)
