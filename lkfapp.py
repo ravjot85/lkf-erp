@@ -67,34 +67,15 @@ db = firestore.client()
 # ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="LKF ERP — Lovely Knitfab", layout="wide", page_icon="🧶")
 
-# ── Hide × clear buttons globally via JS ──
-import streamlit.components.v1 as _gc
-_gc.html("""
-<script>
-(function(){
-    function removeClearBtns(){
-        var doc = window.parent.document;
-        doc.querySelectorAll('button').forEach(function(b){
-            var lbl   = (b.getAttribute('aria-label')||'').toLowerCase();
-            var title = (b.getAttribute('title')||'').toLowerCase();
-            var txt   = b.innerText.trim();
-            if(lbl.indexOf('clear')!==-1 || title.indexOf('clear')!==-1 ||
-               txt===String.fromCharCode(215) || txt===String.fromCharCode(10005)){
-                b.remove();
-            }
-        });
-    }
-    removeClearBtns();
-    setInterval(removeClearBtns, 300);
-    var obs = new MutationObserver(removeClearBtns);
-    obs.observe(window.parent.document.body,{childList:true,subtree:true});
-})();
-</script>
-""", height=0)
 
 # ── Global CSS ──
 st.markdown("""
 <style>
+/* ── Hide clear (×) buttons on inputs — use CSS, never JS remove() ── */
+button[aria-label*="clear" i],
+button[title*="clear" i],
+button[kind="icon"] { display: none !important; }
+
 /* ── App background ── */
 .main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
 
