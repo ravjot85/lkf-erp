@@ -1415,49 +1415,6 @@ elif menu == "Processor Master":
 elif menu == "PO":
     st.markdown('<div class="page-header"><h1>📄 PO Module</h1></div>', unsafe_allow_html=True)
 
-    import streamlit.components.v1 as _po_cv1
-    _po_cv1.html("""
-    <script>
-    (function() {
-        var par = window.parent;
-        // Guard: only install once across all Streamlit reruns
-        if (par._lkfPONavReady) return;
-        par._lkfPONavReady = true;
-
-        function getInputs() {
-            return Array.from(par.document.querySelectorAll(
-                'input[type="text"]:not([disabled]), input[type="number"]:not([disabled])'
-            ));
-        }
-        function setupInputs() {
-            getInputs().forEach(function(inp) {
-                if (inp._enterBound) return;
-                inp._enterBound = true;
-                inp.addEventListener('keydown', function(e) {
-                    if (e.key !== 'Enter') return;
-                    e.preventDefault();
-                    var inputs = getInputs();
-                    var idx = inputs.indexOf(inp);
-                    if (idx >= 0 && idx < inputs.length - 1) {
-                        inputs[idx + 1].focus();
-                        inputs[idx + 1].select();
-                    }
-                });
-            });
-        }
-
-        // Debounce so the observer never fires mid React reconciliation
-        var _t;
-        var obs = new MutationObserver(function() {
-            clearTimeout(_t);
-            _t = setTimeout(setupInputs, 80);
-        });
-        obs.observe(par.document.body, { childList: true, subtree: true });
-        setupInputs();
-    })();
-    </script>
-    """, height=0)
-
     if "po_result"       not in st.session_state: st.session_state.po_result       = None
     if "po_form_version" not in st.session_state: st.session_state.po_form_version = 0
 
