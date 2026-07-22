@@ -4269,22 +4269,53 @@ elif menu == "Reports":
 
             # Lot No search
             lot_search = st.text_input("🔍 Search Lot No", placeholder="e.g. 1553F", key="pr_lot_search").strip().upper()
+
+            _want = ["ChallanNo", "Date", "PartyName", "OrderId", "LotNo",
+                     "Customer name", "Item", "Colour", "Roll", "Qnty", "Process", "DiaGsm"]
+            _rename = {"Customer name": "Customer", "PartyName": "Processor", "DiaGsm": "Dia/GSM"}
+
             if lot_search:
-                pr_df = pr_df[pr_df["LotNo"].astype(str).str.upper().str.contains(lot_search, na=False)]
+                # ── Section 1: Pending ──────────────────────────────────────
+                st.markdown("#### ⏳ Pending — still with processor")
+                lot_pending = pr_df[pr_df["LotNo"].astype(str).str.upper().str.contains(lot_search, na=False)]
+                if lot_pending.empty:
+                    st.info("No pending lots found for this Lot No.")
+                else:
+                    _show = [c for c in _want if c in lot_pending.columns]
+                    pend_disp = (lot_pending[_show]
+                                 .rename(columns=_rename)
+                                 .sort_values(["ChallanNo", "LotNo"], ascending=True))
+                    st.markdown(f"**{len(pend_disp)} lots pending inward** — sorted by Challan No")
+                    st.dataframe(pend_disp, use_container_width=True, hide_index=True)
 
-            # Full table
-            want = ["ChallanNo", "Date", "PartyName", "OrderId", "LotNo",
-                    "Customer name", "Item", "Colour", "Roll", "Qnty", "Process", "DiaGsm"]
-            show = [c for c in want if c in pr_df.columns]
+                st.divider()
 
-            rename_map = {"Customer name": "Customer", "PartyName": "Processor",
-                          "DiaGsm": "Dia/GSM"}
-            disp_df = (pr_df[show]
-                       .rename(columns=rename_map)
-                       .sort_values(["ChallanNo","LotNo"], ascending=True))
+                # ── Section 2: In House ─────────────────────────────────────
+                st.markdown("#### 🏠 In House — received back from processor")
+                inh_docs = [d for d in in_docs
+                            if lot_search in str(d.get("LotNo", "")).upper().strip()]
+                if not inh_docs:
+                    st.info("No inward records found for this Lot No.")
+                else:
+                    inh_df = pd.DataFrame(inh_docs)
+                    inh_want = ["ChallanNo", "Date", "PartyName", "LotNo", "Colour",
+                                "ReceivedQty", "ShortQty", "Rate", "Amount", "Remarks"]
+                    inh_show = [c for c in inh_want if c in inh_df.columns]
+                    inh_disp = (inh_df[inh_show]
+                                .rename(columns={"PartyName": "Processor"})
+                                .sort_values("ChallanNo", ascending=True))
+                    total_recv = inh_df["ReceivedQty"].apply(lambda x: float(x or 0)).sum() if "ReceivedQty" in inh_df.columns else 0
+                    st.markdown(f"**{len(inh_disp)} inward records** | Total Received Qty: **{total_recv:,.2f}**")
+                    st.dataframe(inh_disp, use_container_width=True, hide_index=True)
 
-            st.markdown(f"**{len(disp_df)} lots pending inward** — sorted by Challan No")
-            st.dataframe(disp_df, use_container_width=True, hide_index=True)
+            else:
+                # No search — show full pending table
+                _show = [c for c in _want if c in pr_df.columns]
+                disp_df = (pr_df[_show]
+                           .rename(columns=_rename)
+                           .sort_values(["ChallanNo", "LotNo"], ascending=True))
+                st.markdown(f"**{len(disp_df)} lots pending inward** — sorted by Challan No")
+                st.dataframe(disp_df, use_container_width=True, hide_index=True)
 
      elif rpt_type == "📦 Part Dispatched":
         st.markdown("### 📦 Part Dispatched Orders")
