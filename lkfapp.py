@@ -4274,6 +4274,13 @@ elif menu == "Reports":
                      "Customer name", "Item", "Colour", "Roll", "Qnty", "Process", "DiaGsm"]
             _rename = {"Customer name": "Customer", "PartyName": "Processor", "DiaGsm": "Dia/GSM"}
 
+            def _fmt_dates(df):
+                if "Date" in df.columns:
+                    df = df.copy()
+                    _parsed = pd.to_datetime(df["Date"], errors="coerce")
+                    df["Date"] = _parsed.dt.strftime("%d/%m/%Y").where(_parsed.notna(), df["Date"].astype(str))
+                return df
+
             if lot_search:
                 # ── Section 1: Pending ──────────────────────────────────────
                 st.markdown("#### ⏳ Pending — still with processor")
@@ -4282,7 +4289,7 @@ elif menu == "Reports":
                     st.info("No pending lots found for this Lot No.")
                 else:
                     _show = [c for c in _want if c in lot_pending.columns]
-                    pend_disp = (lot_pending[_show]
+                    pend_disp = _fmt_dates(lot_pending[_show]
                                  .rename(columns=_rename)
                                  .sort_values(["ChallanNo", "LotNo"], ascending=True))
                     st.markdown(f"**{len(pend_disp)} lots pending inward** — sorted by Challan No")
@@ -4301,7 +4308,7 @@ elif menu == "Reports":
                     inh_want = ["ChallanNo", "Date", "PartyName", "LotNo", "Colour",
                                 "ReceivedQty", "ShortQty", "Rate", "Amount", "Remarks"]
                     inh_show = [c for c in inh_want if c in inh_df.columns]
-                    inh_disp = (inh_df[inh_show]
+                    inh_disp = _fmt_dates(inh_df[inh_show]
                                 .rename(columns={"PartyName": "Processor"})
                                 .sort_values("ChallanNo", ascending=True))
                     total_recv = inh_df["ReceivedQty"].apply(lambda x: float(x or 0)).sum() if "ReceivedQty" in inh_df.columns else 0
@@ -4311,7 +4318,7 @@ elif menu == "Reports":
             else:
                 # No search — show full pending table
                 _show = [c for c in _want if c in pr_df.columns]
-                disp_df = (pr_df[_show]
+                disp_df = _fmt_dates(pr_df[_show]
                            .rename(columns=_rename)
                            .sort_values(["ChallanNo", "LotNo"], ascending=True))
                 st.markdown(f"**{len(disp_df)} lots pending inward** — sorted by Challan No")
