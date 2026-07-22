@@ -2781,21 +2781,28 @@ elif menu == "Packing":
     tab_form, tab_print = st.tabs(["📝 New Packing List", "🖨️ Print Packing List"])
 
     # ── Session state (shared across both tabs) ──
-    if "pack_fabric_rows"    not in st.session_state: st.session_state.pack_fabric_rows    = [{"id": 0, "wc": 12}]
-    if "pack_fabric_nid"     not in st.session_state: st.session_state.pack_fabric_nid     = 1
-    if "pack_acc_rows"       not in st.session_state: st.session_state.pack_acc_rows       = [{"id": 0, "wc": 12}]
-    if "pack_acc_nid"        not in st.session_state: st.session_state.pack_acc_nid        = 1
-    if "pack_result"         not in st.session_state: st.session_state.pack_result         = None
-    if "pack_last_oid"       not in st.session_state: st.session_state.pack_last_oid       = ""
+    if "pack_fv"          not in st.session_state: st.session_state.pack_fv          = 0
+    if "pack_fabric_rows" not in st.session_state: st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
+    if "pack_fabric_nid"  not in st.session_state: st.session_state.pack_fabric_nid  = 1
+    if "pack_acc_rows"    not in st.session_state: st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
+    if "pack_acc_nid"     not in st.session_state: st.session_state.pack_acc_nid     = 1
+    if "pack_result"      not in st.session_state: st.session_state.pack_result      = None
+    if "pack_last_oid"    not in st.session_state: st.session_state.pack_last_oid    = ""
+
+    def _next_pack_fv():
+        """Increment form version and return new base row ID so all widget keys change."""
+        st.session_state.pack_fv += 1
+        return st.session_state.pack_fv * 1000
 
     # ── Clear callback ──
     def _clear_packing():
         for k in [k for k in st.session_state if k.startswith(("fc_", "ac_", "pack_oid", "pack_item", "pack_cust"))]:
             del st.session_state[k]
-        st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
-        st.session_state.pack_fabric_nid  = 1
-        st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
-        st.session_state.pack_acc_nid     = 1
+        _base = _next_pack_fv()
+        st.session_state.pack_fabric_rows = [{"id": _base, "wc": 12}]
+        st.session_state.pack_fabric_nid  = _base + 1
+        st.session_state.pack_acc_rows    = [{"id": _base, "wc": 12}]
+        st.session_state.pack_acc_nid     = _base + 1
         st.session_state.pack_result      = None
         st.session_state.pack_last_oid    = ""
 
@@ -2835,14 +2842,12 @@ elif menu == "Packing":
             st.session_state.pack_last_oid    = order_id_in.strip()
             st.session_state.pack_item_edit   = pack_po.get("Item", "")          if pack_po else ""
             st.session_state.pack_cust_manual = pack_po.get("Customer name", "") if pack_po else ""
-            # Clear colour names and weight values
-            for _k in [_k for _k in st.session_state if _k.startswith(("fc_", "ac_"))]:
-                del st.session_state[_k]
-            # Reset weight row structure to default 12 boxes
-            st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
-            st.session_state.pack_fabric_nid  = 1
-            st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
-            st.session_state.pack_acc_nid     = 1
+            # Bump form version so all widget keys change → Streamlit renders fresh empty inputs
+            _base = _next_pack_fv()
+            st.session_state.pack_fabric_rows = [{"id": _base, "wc": 12}]
+            st.session_state.pack_fabric_nid  = _base + 1
+            st.session_state.pack_acc_rows    = [{"id": _base, "wc": 12}]
+            st.session_state.pack_acc_nid     = _base + 1
         if "pack_item_edit"   not in st.session_state: st.session_state.pack_item_edit   = ""
         if "pack_cust_manual" not in st.session_state: st.session_state.pack_cust_manual = ""
 
