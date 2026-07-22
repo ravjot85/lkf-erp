@@ -2830,12 +2830,15 @@ elif menu == "Packing":
                          f"Use a suffix (e.g. {oid_clean}A) for a new slip, "
                          f"or use **Edit Packing List** to update the existing one.")
 
-        # Reset fields when order changes
+        # Reset all form fields when order changes
         if order_id_in.strip() != st.session_state.pack_last_oid:
             st.session_state.pack_last_oid    = order_id_in.strip()
             st.session_state.pack_item_edit   = pack_po.get("Item", "")          if pack_po else ""
             st.session_state.pack_cust_manual = pack_po.get("Customer name", "") if pack_po else ""
-            # Reset weight boxes to 12 for the new order
+            # Clear colour names and weight values
+            for _k in [_k for _k in st.session_state if _k.startswith(("fc_", "ac_"))]:
+                del st.session_state[_k]
+            # Reset weight row structure to default 12 boxes
             st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
             st.session_state.pack_fabric_nid  = 1
             st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
