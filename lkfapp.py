@@ -2556,16 +2556,20 @@ elif menu == "Packing":
     components.html("""
     <script>
     (function() {
+        var par = window.parent;
+        if (par._lkfPackNavReady) return;
+        par._lkfPackNavReady = true;
+
         var pendingFocus = false;
 
         function allWtInputs() {
-            return Array.from(window.parent.document.querySelectorAll('input')).filter(function(i) {
+            return Array.from(par.document.querySelectorAll('input')).filter(function(i) {
                 return (i.getAttribute('placeholder') || '') === 'Wt';
             });
         }
 
         function setupWeightEnter() {
-            var doc = window.parent.document;
+            var doc = par.document;
             doc.querySelectorAll('input').forEach(function(inp) {
                 if (inp._wEnterBound) return;
                 if ((inp.getAttribute('placeholder') || '') !== 'Wt') return;
@@ -2573,28 +2577,37 @@ elif menu == "Packing":
                 inp.addEventListener('keydown', function(e) {
                     if (e.key !== 'Enter') return;
                     e.preventDefault();
+                    e.stopPropagation();
 
-                    // Find the next available Wt input after the current one
-                    var inputs = allWtInputs();
-                    var idx    = inputs.indexOf(inp);
-                    if (idx >= 0 && idx < inputs.length - 1) {
-                        // Move focus to next existing weight box
-                        inputs[idx + 1].focus();
-                        inputs[idx + 1].select();
-                    } else {
-                        // At last box — add a new one via ＋ Weight button
-                        var allBtns  = Array.from(doc.querySelectorAll('button'));
-                        var plusBtns = allBtns.filter(function(b) {
-                            return b.textContent.trim().indexOf('＋') !== -1 &&
-                                   b.textContent.trim().indexOf('Weight') !== -1;
-                        });
-                        for (var i = 0; i < plusBtns.length; i++) {
-                            if (inp.compareDocumentPosition(plusBtns[i]) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                                pendingFocus = true;
-                                plusBtns[i].click();
-                                break;
-                            }
+                    // Find the nearest ＋ Weight button AFTER this input (same row)
+                    var allBtns  = Array.from(doc.querySelectorAll('button'));
+                    var plusBtns = allBtns.filter(function(b) {
+                        return b.textContent.trim().indexOf('＋') !== -1 &&
+                               b.textContent.trim().indexOf('Weight') !== -1;
+                    });
+                    var rowBtn = null;
+                    for (var i = 0; i < plusBtns.length; i++) {
+                        if (inp.compareDocumentPosition(plusBtns[i]) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                            rowBtn = plusBtns[i]; break;
                         }
+                    }
+
+                    // Next Wt input after this one
+                    var inputs  = allWtInputs();
+                    var idx     = inputs.indexOf(inp);
+                    var nextInp = (idx >= 0 && idx < inputs.length - 1) ? inputs[idx + 1] : null;
+
+                    // Only move to next input if it falls BEFORE this row's ＋ Weight button
+                    var nextIsInRow = nextInp && rowBtn &&
+                        (rowBtn.compareDocumentPosition(nextInp) & Node.DOCUMENT_POSITION_PRECEDING);
+
+                    if (nextIsInRow) {
+                        nextInp.focus();
+                        nextInp.select();
+                    } else if (rowBtn) {
+                        // Last weight in this row — add a new box
+                        pendingFocus = true;
+                        rowBtn.click();
                     }
                 });
             });
@@ -2613,7 +2626,7 @@ elif menu == "Packing":
             setupWeightEnter();
         });
 
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        obs.observe(par.document.body, { childList: true, subtree: true });
         setupWeightEnter();
     })();
     </script>
