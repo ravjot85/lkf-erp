@@ -2833,8 +2833,13 @@ elif menu == "Packing":
         # Reset fields when order changes
         if order_id_in.strip() != st.session_state.pack_last_oid:
             st.session_state.pack_last_oid    = order_id_in.strip()
-            st.session_state.pack_item_edit   = pack_po.get("Item", "")         if pack_po else ""
+            st.session_state.pack_item_edit   = pack_po.get("Item", "")          if pack_po else ""
             st.session_state.pack_cust_manual = pack_po.get("Customer name", "") if pack_po else ""
+            # Reset weight boxes to 12 for the new order
+            st.session_state.pack_fabric_rows = [{"id": 0, "wc": 12}]
+            st.session_state.pack_fabric_nid  = 1
+            st.session_state.pack_acc_rows    = [{"id": 0, "wc": 12}]
+            st.session_state.pack_acc_nid     = 1
         if "pack_item_edit"   not in st.session_state: st.session_state.pack_item_edit   = ""
         if "pack_cust_manual" not in st.session_state: st.session_state.pack_cust_manual = ""
 
