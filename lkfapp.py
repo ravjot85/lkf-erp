@@ -643,7 +643,8 @@ def get_processor_list():
 def _load_status_df():
     po_docs       = [d.to_dict() for d in db.collection("po").stream()]
     shoot_raw     = [d.to_dict() for d in db.collection("shoot_order").stream()]
-    shoot_dates   = {d.get("OrderId",""): d.get("Date","") for d in shoot_raw if d.get("OrderId","")}
+    shoot_dates    = {d.get("OrderId",""): d.get("Date","")    for d in shoot_raw if d.get("OrderId","")}
+    shoot_pdf_urls = {d.get("OrderId",""): d.get("pdf_url","") for d in shoot_raw if d.get("OrderId","")}
     shoot_ids     = set(shoot_dates.keys())
     proc_out_raw  = [d.to_dict() for d in db.collection("process_out").stream()]
     proc_in_ids   = {d.to_dict().get("OrderId","") for d in db.collection("process_inward").stream()}
@@ -729,6 +730,7 @@ def _load_status_df():
             "PackedAccQty":   packed_acc,
             "Status":         status,
             "pdf_url":        d.get("pdf_url", ""),
+            "shoot_pdf_url":  shoot_pdf_urls.get(oid, ""),
             "image_drive_id": d.get("image_drive_id", ""),
             "image_url":      d.get("image", ""),
             "Accessory":      d.get("accessory", ""),
@@ -764,6 +766,7 @@ def _load_status_df():
             "PackedAccQty":   aqty,
             "Status":         "Dispatched",
             "pdf_url":        first.get("pdf_url", ""),
+            "shoot_pdf_url":  "",
             "image_drive_id": "",
             "image_url":      "",
             "Accessory":      "",
@@ -3678,7 +3681,7 @@ elif menu == "Reports":
             return buf.getvalue()
 
         # ── UI ──
-        cc1, cc2, cc3 = st.columns([2, 1.5, 1.5])
+        cc1, cc2 = st.columns([2, 2])
         with cc1:
             # Build norm → display name map from customer_master (preserves spaces)
             # Normalisation is used only for matching; display shows original spaced name
@@ -3698,8 +3701,11 @@ elif menu == "Reports":
         with cc2:
             date_filter = st.selectbox("Date Range", ["All Dates", "This Month", "Custom"], key="cr_drange")
 
-        with cc3:
-            include_dispatched = st.checkbox("Include Dispatched", value=False, key="cr_incl_disp")
+        cr_sec_filter = st.radio(
+            "Show", ["All", "In Production", "Pending", "Dispatched"],
+            horizontal=True, key="cr_sec_filter", label_visibility="collapsed",
+        )
+        include_dispatched = cr_sec_filter == "Dispatched"
 
         from_date, to_date = None, None
         if date_filter == "Custom":
@@ -3760,30 +3766,36 @@ elif menu == "Reports":
             pending_f   = _apply_cr_filter(pending_cdf)
             dispatch_f  = _apply_cr_filter(dispatch_cdf) if include_dispatched else pd.DataFrame()
 
-            _base_cols     = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
-                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
-            _prod_cols     = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
-                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
-            _disp_cols     = ["Date","DispatchDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
-                              "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
+            _base_cols = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                          "FabricQty","AccQty","FabricPrice","AccPrice","Status","pdf_url","image_url"]
+            _prod_cols = ["Date","ShootDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                          "FabricQty","AccQty","FabricPrice","AccPrice","Status","shoot_pdf_url","image_url"]
+            _disp_cols = ["Date","DispatchDate","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
+                          "FabricQty","AccQty","FabricPrice","AccPrice","Status","pdf_url","image_url"]
 
-            def show_section(label, sdf, cols):
+            def show_section(label, sdf, cols, pdf_col_cfg=None):
                 if sdf.empty:
                     return
                 st.markdown(f"**{label}** — Orders: {len(sdf)} | Qty: {int(sdf['FabricQty'].sum())} Kgs")
                 c = [x for x in cols if x in sdf.columns]
+                cfg = {"image_url": st.column_config.LinkColumn("Image", display_text="🖼️ View")}
+                if pdf_col_cfg:
+                    cfg.update(pdf_col_cfg)
                 st.dataframe(
                     sdf[c].sort_values("OrderId", ascending=False),
                     use_container_width=True, hide_index=True,
-                    column_config={
-                        "image_url": st.column_config.LinkColumn("Image", display_text="🖼️ View"),
-                    }
+                    column_config=cfg,
                 )
 
-            show_section("IN PRODUCTION", in_prod_f,  _prod_cols)
-            show_section("PENDING",       pending_f,  _base_cols)
-            if include_dispatched:
-                show_section("DISPATCHED", dispatch_f, _disp_cols)
+            if cr_sec_filter in ("All", "In Production"):
+                show_section("IN PRODUCTION", in_prod_f, _prod_cols,
+                             {"shoot_pdf_url": st.column_config.LinkColumn("📄 Shoot PDF", display_text="Open")})
+            if cr_sec_filter in ("All", "Pending"):
+                show_section("PENDING", pending_f, _base_cols,
+                             {"pdf_url": st.column_config.LinkColumn("📄 PO PDF", display_text="Open")})
+            if cr_sec_filter == "Dispatched":
+                show_section("DISPATCHED", dispatch_f, _disp_cols,
+                             {"pdf_url": st.column_config.LinkColumn("📄 PO PDF", display_text="Open")})
 
             st.divider()
 
