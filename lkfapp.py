@@ -3710,9 +3710,9 @@ elif menu == "Reports":
                 to_date   = st.date_input("To", format="DD/MM/YYYY", key="cr_to")
 
         if sel_cust:
-            # Include Dispatched if toggled; otherwise use only active orders
-            src_df = df if include_dispatched else df_active
-            cdf = src_df[src_df["CustomerNorm"] == sel_cust].copy()
+            # Always exclude Cancelled; Dispatched included in cdf for date-filter accuracy
+            cdf = df[df["Status"] != "Cancelled"]
+            cdf = cdf[cdf["CustomerNorm"] == sel_cust].copy()
 
             # Apply date filter
             if date_filter == "This Month":
@@ -3730,7 +3730,11 @@ elif menu == "Reports":
 
             in_prod_df   = cdf[~cdf["Status"].isin(["Pending","Dispatched","Cancelled"])]
             pending_cdf  = cdf[cdf["Status"] == "Pending"]
-            dispatch_cdf = cdf[(cdf["Status"] == "Dispatched") & (cdf["HasPO"] == True)] if include_dispatched else pd.DataFrame()
+            dispatch_cdf = cdf[(cdf["Status"] == "Dispatched") & (cdf["HasPO"] == True)]
+
+            # Grand Total = only sections that are visible
+            _shown = [in_prod_df, pending_cdf] + ([dispatch_cdf] if include_dispatched else [])
+            _grand_df = pd.concat(_shown, ignore_index=True) if _shown else pd.DataFrame(columns=["FabricQty"])
 
             # KPI tiles
             ck1, ck2, ck3, ck4 = st.columns(4)
@@ -3738,7 +3742,7 @@ elif menu == "Reports":
             ck2.metric("⏳ Pending",        len(pending_cdf),  f"{int(pending_cdf['FabricQty'].sum())} Kgs")
             ck3.metric("📦 Dispatched",     len(dispatch_cdf) if include_dispatched else "—",
                                             f"{int(dispatch_cdf['FabricQty'].sum())} Kgs" if include_dispatched else "")
-            ck4.metric("📊 Grand Total",    len(cdf),          f"{int(cdf['FabricQty'].sum())} Kgs")
+            ck4.metric("📊 Grand Total",    len(_grand_df),    f"{int(_grand_df['FabricQty'].sum())} Kgs")
 
             st.divider()
 
@@ -3758,7 +3762,7 @@ elif menu == "Reports":
 
             in_prod_f   = _apply_cr_filter(in_prod_df)
             pending_f   = _apply_cr_filter(pending_cdf)
-            dispatch_f  = _apply_cr_filter(dispatch_cdf) if include_dispatched else pd.DataFrame()
+            dispatch_f  = _apply_cr_filter(dispatch_cdf)
 
             _base_cols     = ["Date","OrderId","CustomerPoNo","Category","Customer","Item","GSM",
                               "FabricQty","AccQty","FabricPrice","AccPrice","Status","image_url"]
