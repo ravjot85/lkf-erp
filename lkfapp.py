@@ -2232,20 +2232,37 @@ elif menu == "Process Inward":
         # ── Add lot form ──
         st.markdown("#### Add Lot")
 
-        # Fetch process_out lots for selected party — store doc_id to avoid
-        # index-order bugs when Firestore returns docs in different order each rerun
+        # Re-fetch only when party changes; cleared after save or manual refresh
+        if st.session_state.get("_pi_cached_party") != in_party:
+            for _k in ["_pi_proc_out_docs", "_pi_proc_in_docs", "_pi_cached_party"]:
+                st.session_state.pop(_k, None)
+
+        _pi_lh, _pi_rb = st.columns([5, 1])
+        with _pi_rb:
+            if in_party and st.button("🔄 Refresh", key="pi_refresh_lots", use_container_width=True):
+                for _k in ["_pi_proc_out_docs", "_pi_proc_in_docs", "_pi_cached_party"]:
+                    st.session_state.pop(_k, None)
+
         available_lots = {}   # doc_id → data dict
         if in_party:
-            for doc in db.collection("process_out").where("PartyName", "==", in_party).stream():
-                available_lots[doc.id] = doc.to_dict()
+            if "_pi_proc_out_docs" not in st.session_state:
+                _raw = {}
+                for doc in db.collection("process_out").where("PartyName", "==", in_party).stream():
+                    _raw[doc.id] = doc.to_dict()
+                st.session_state["_pi_proc_out_docs"] = _raw
+                st.session_state["_pi_proc_in_docs"]  = [
+                    d.to_dict() for d in
+                    db.collection("process_inward").where("PartyName", "==", in_party).stream()
+                ]
+                st.session_state["_pi_cached_party"] = in_party
+            available_lots = dict(st.session_state["_pi_proc_out_docs"])
 
         # Exclude process_out entries that have been fully received.
         # If ProcessOutDocId is stored in inward records, use exact matching.
         # Fall back to waterfall only for legacy records without the reference.
         if available_lots:
             from collections import defaultdict as _dd2
-            _in_docs = [d.to_dict() for d in
-                        db.collection("process_inward").where("PartyName","==",in_party).stream()]
+            _in_docs = list(st.session_state["_pi_proc_in_docs"])
 
             # Received qty keyed by ProcessOutDocId (exact) and by LotNo (fallback)
             _recv_by_docid = {}
@@ -2525,6 +2542,9 @@ elif menu == "Process Inward":
                     st.session_state.proc_in_result     = {"challan_no": challan_no, "pdf_bytes": pdf_bytes, "pdf_url": pdf_url, "pdf_name": pdf_name}
                     st.session_state.proc_in_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_in_lots       = []
+                    # Clear lot cache so the received lots are removed from the dropdown
+                    for _k in ["_pi_proc_out_docs", "_pi_proc_in_docs", "_pi_cached_party"]:
+                        st.session_state.pop(_k, None)
                     st.rerun()
         else:
             if available_lots:
