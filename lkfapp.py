@@ -2033,6 +2033,7 @@ elif menu == "Process Out":
                     st.session_state.proc_out_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_out_lots     = []
                     st.session_state.proc_out_last_lot = ""
+                    st.session_state.pop("_po_view_rows", None)
                     st.rerun()
         else:
             st.info("No lots added yet — use the form above to add lots to this challan.")
@@ -2048,7 +2049,18 @@ elif menu == "Process Out":
                 _cv1.html(res["challan_html"], height=ch_height, scrolling=True)
 
     with tab_view:
-        rows = [{**doc.to_dict(), "Date": _fmt_date(doc.to_dict().get("Date",""))} for doc in db.collection("process_out").stream()]
+        _pov_h, _pov_r = st.columns([5, 1])
+        with _pov_r:
+            if st.button("🔄 Refresh", key="po_view_refresh", use_container_width=True):
+                st.session_state.pop("_po_view_rows", None)
+        if "_po_view_rows" not in st.session_state:
+            _raw = []
+            for doc in db.collection("process_out").stream():
+                _d = doc.to_dict()
+                _d["Date"] = _fmt_date(_d.get("Date", ""))
+                _raw.append(_d)
+            st.session_state["_po_view_rows"] = _raw
+        rows = st.session_state["_po_view_rows"]
         if rows:
             want = ["ChallanNo", "Date", "PartyName", "LotNo", "OrderId", "Item", "Colour", "Roll", "Qnty", "Process"]
             df = pd.DataFrame(rows)
@@ -2543,7 +2555,7 @@ elif menu == "Process Inward":
                     st.session_state.proc_in_challan_no = str(int(challan_no) + 1)
                     st.session_state.proc_in_lots       = []
                     # Clear lot cache so the received lots are removed from the dropdown
-                    for _k in ["_pi_proc_out_docs", "_pi_proc_in_docs", "_pi_cached_party"]:
+                    for _k in ["_pi_proc_out_docs", "_pi_proc_in_docs", "_pi_cached_party", "_pi_view_rows"]:
                         st.session_state.pop(_k, None)
                     st.rerun()
         else:
@@ -2560,7 +2572,18 @@ elif menu == "Process Inward":
                 ic2.download_button("⬇️ Download Challan PDF", res["pdf_bytes"], res["pdf_name"], "application/pdf", key="proc_in_dl")
 
     with tab_view:
-        rows = [{**doc.to_dict(), "Date": _fmt_date(doc.to_dict().get("Date",""))} for doc in db.collection("process_inward").stream()]
+        _piv_h, _piv_r = st.columns([5, 1])
+        with _piv_r:
+            if st.button("🔄 Refresh", key="pi_view_refresh", use_container_width=True):
+                st.session_state.pop("_pi_view_rows", None)
+        if "_pi_view_rows" not in st.session_state:
+            _raw = []
+            for doc in db.collection("process_inward").stream():
+                _d = doc.to_dict()
+                _d["Date"] = _fmt_date(_d.get("Date", ""))
+                _raw.append(_d)
+            st.session_state["_pi_view_rows"] = _raw
+        rows = st.session_state["_pi_view_rows"]
         if rows:
             want = ["ChallanNo", "Date", "PartyName", "LotNo", "OrderId", "Colour", "Process", "SentQty", "ReceivedQty", "ShortQty", "ShortPct", "Rate", "Amount"]
             df   = pd.DataFrame(rows)
