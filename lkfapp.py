@@ -2065,7 +2065,12 @@ elif menu == "Process Out":
             want = ["ChallanNo", "Date", "PartyName", "LotNo", "OrderId", "Item", "Colour", "Roll", "Qnty", "Process"]
             df = pd.DataFrame(rows)
             cols = [c for c in want if c in df.columns]
-            st.dataframe(df[cols].sort_values("ChallanNo", ascending=False), use_container_width=True)
+            _po_view_df = df[cols].copy()
+            _po_view_df["_sort"] = pd.to_numeric(_po_view_df["ChallanNo"], errors="coerce")
+            st.dataframe(
+                _po_view_df.sort_values("_sort", ascending=False).drop(columns=["_sort"]),
+                use_container_width=True, hide_index=True
+            )
         else:
             st.info("No Process Out records yet")
 
@@ -2588,7 +2593,12 @@ elif menu == "Process Inward":
             want = ["ChallanNo", "Date", "PartyName", "LotNo", "OrderId", "Colour", "Process", "SentQty", "ReceivedQty", "ShortQty", "ShortPct", "Rate", "Amount"]
             df   = pd.DataFrame(rows)
             cols = [c for c in want if c in df.columns]
-            st.dataframe(df[cols].sort_values("ChallanNo", ascending=False), use_container_width=True)
+            _pi_view_df = df[cols].copy()
+            _pi_view_df["_sort"] = pd.to_numeric(_pi_view_df["ChallanNo"], errors="coerce")
+            st.dataframe(
+                _pi_view_df.sort_values("_sort", ascending=False).drop(columns=["_sort"]),
+                use_container_width=True, hide_index=True
+            )
         else:
             st.info("No Process Inward records yet")
 
