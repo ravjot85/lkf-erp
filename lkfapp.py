@@ -284,6 +284,7 @@ _REPORTS = [
     "🔄 Processing Report",
     "📦 Part Dispatched",
     "🏠 In House Finishing",
+    "📊 ITC-04 Report",
 ]
 _MASTERS = [
     ("👥", "Customer Master"),
@@ -4479,6 +4480,134 @@ elif menu == "Reports":
                     "PO PDF": st.column_config.LinkColumn("PO PDF", display_text="📄 View"),
                 }
             )
+
+     elif rpt_type == "📊 ITC-04 Report":
+        st.markdown("### 📊 ITC-04 Report (Job Work)")
+        st.caption("Export Process Out / Process Inward data for GST ITC-04 filing. Value column is left blank.")
+
+        import io as _io
+        from datetime import date as _date_cls
+
+        _g1, _g2 = st.columns(2)
+        with _g1:
+            _itc_from = st.date_input("From Date", value=_date_cls.today().replace(day=1), key="itc_from")
+        with _g2:
+            _itc_to   = st.date_input("To Date",   value=_date_cls.today(),               key="itc_to")
+
+        _itc_from_str = _itc_from.strftime("%Y-%m-%d")
+        _itc_to_str   = _itc_to.strftime("%Y-%m-%d")
+
+        def _itc_fmt_date(v):
+            try:
+                from datetime import datetime as _dt
+                return _dt.strptime(str(v), "%Y-%m-%d").strftime("%d/%m/%Y")
+            except Exception:
+                return str(v)
+
+        def _itc_col(df_, c, default=""):
+            return df_[c].fillna(default) if c in df_.columns else pd.Series([default] * len(df_), dtype=str)
+
+        st.divider()
+        _tab_out, _tab_in = st.tabs(["🚚 Process Out (Goods Sent)", "📥 Process Inward (Goods Received)"])
+
+        with _tab_out:
+            if st.button("📥 Generate Process Out Excel", key="itc_out_btn"):
+                with st.spinner("Loading..."):
+                    _po_raw = [
+                        d.to_dict() for d in
+                        db.collection("process_out")
+                          .where("Date", ">=", _itc_from_str)
+                          .where("Date", "<=", _itc_to_str)
+                          .stream()
+                    ]
+                if not _po_raw:
+                    st.warning("No Process Out records found for this date range.")
+                else:
+                    _po_df = pd.DataFrame(_po_raw)
+                    _po_df["_ChallanSort"] = pd.to_numeric(_itc_col(_po_df, "ChallanNo"), errors="coerce")
+                    _po_df = _po_df.sort_values(["_ChallanSort", "LotNo"], ascending=True).reset_index(drop=True)
+                    _out_rows = pd.DataFrame({
+                        "Sr. No":              range(1, len(_po_df) + 1),
+                        "GSTIN of Job Worker": _itc_col(_po_df, "GstNo"),
+                        "Name of Job Worker":  _itc_col(_po_df, "PartyName"),
+                        "Description of Goods": (
+                            _itc_col(_po_df, "Item").astype(str)   + " | " +
+                            _itc_col(_po_df, "Colour").astype(str) + " | " +
+                            _itc_col(_po_df, "Process").astype(str)
+                        ),
+                        "UQC":               "KGS",
+                        "Quantity":          pd.to_numeric(_itc_col(_po_df, "Qnty"),      errors="coerce"),
+                        "Taxable Value":     "",
+                        "Challan No":        _itc_col(_po_df, "ChallanNo"),
+                        "Challan Date":      _itc_col(_po_df, "Date").apply(_itc_fmt_date),
+                        "Lot No":            _itc_col(_po_df, "LotNo"),
+                        "Vehicle No":        _itc_col(_po_df, "VehicleNo"),
+                    })
+                    _buf_out = _io.BytesIO()
+                    with pd.ExcelWriter(_buf_out, engine="openpyxl") as _ew:
+                        _out_rows.to_excel(_ew, index=False, sheet_name="ITC-04 Process Out")
+                    _buf_out.seek(0)
+                    st.success(f"{len(_out_rows)} rows ready.")
+                    st.download_button(
+                        "⬇️ Download Excel",
+                        data=_buf_out,
+                        file_name=f"ITC04_ProcessOut_{_itc_from_str}_to_{_itc_to_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="itc_out_dl",
+                    )
+
+        with _tab_in:
+            if st.button("📥 Generate Process Inward Excel", key="itc_in_btn"):
+                with st.spinner("Loading..."):
+                    _pi_raw = [
+                        d.to_dict() for d in
+                        db.collection("process_inward")
+                          .where("Date", ">=", _itc_from_str)
+                          .where("Date", "<=", _itc_to_str)
+                          .stream()
+                    ]
+                    _gst_map = {
+                        doc.id.strip().upper(): doc.to_dict().get("GstNo", "")
+                        for doc in db.collection("processor_master").stream()
+                    }
+                if not _pi_raw:
+                    st.warning("No Process Inward records found for this date range.")
+                else:
+                    _pi_df = pd.DataFrame(_pi_raw)
+                    _pi_df["_ChallanSort"] = pd.to_numeric(_itc_col(_pi_df, "ChallanNo"), errors="coerce")
+                    _pi_df = _pi_df.sort_values(["_ChallanSort", "LotNo"], ascending=True).reset_index(drop=True)
+                    _pi_df["_GstNo"] = _itc_col(_pi_df, "PartyName").apply(
+                        lambda p: _gst_map.get(str(p).strip().upper(), "")
+                    )
+                    _in_rows = pd.DataFrame({
+                        "Sr. No":              range(1, len(_pi_df) + 1),
+                        "GSTIN of Job Worker": _pi_df["_GstNo"],
+                        "Name of Job Worker":  _itc_col(_pi_df, "PartyName"),
+                        "Description of Goods": (
+                            _itc_col(_pi_df, "Item").astype(str)   + " | " +
+                            _itc_col(_pi_df, "Colour").astype(str) + " | " +
+                            _itc_col(_pi_df, "Process").astype(str)
+                        ),
+                        "UQC":                  "KGS",
+                        "Quantity Received":    pd.to_numeric(_itc_col(_pi_df, "ReceivedQty"), errors="coerce"),
+                        "Taxable Value":        "",
+                        "Challan No":           _itc_col(_pi_df, "ChallanNo"),
+                        "Challan Date":         _itc_col(_pi_df, "Date").apply(_itc_fmt_date),
+                        "Lot No":               _itc_col(_pi_df, "LotNo"),
+                        "Vehicle No":           _itc_col(_pi_df, "VehicleNo"),
+                    })
+                    _buf_in = _io.BytesIO()
+                    with pd.ExcelWriter(_buf_in, engine="openpyxl") as _ew2:
+                        _in_rows.to_excel(_ew2, index=False, sheet_name="ITC-04 Process Inward")
+                    _buf_in.seek(0)
+                    st.success(f"{len(_in_rows)} rows ready.")
+                    st.download_button(
+                        "⬇️ Download Excel",
+                        data=_buf_in,
+                        file_name=f"ITC04_ProcessInward_{_itc_from_str}_to_{_itc_to_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="itc_in_dl",
+                    )
 
      elif rpt_type == "__removed__":
         pass  # Print Packing List moved to Packing form tab
