@@ -270,6 +270,8 @@ _FORMS = [
     ("📥", "Process Inward"),
     ("📦", "Packing"),
     ("❌", "Cancel Order"),
+    ("🧵", "Yarn Outwards"),
+    ("🧶", "Yarn Inwards"),
 ]
 _REPORTS = [
     "📋 All Orders",
@@ -285,6 +287,7 @@ _REPORTS = [
     "📦 Part Dispatched",
     "🏠 In House Finishing",
     "📊 ITC-04 Report",
+    "🧵 Yarn Report",
 ]
 _MASTERS = [
     ("👥", "Customer Master"),
@@ -3308,6 +3311,327 @@ elif menu == "Cancel Order":
         else:
             st.info("No cancelled orders yet")
 
+# ═════════════════════════════════════════════════════════
+elif menu == "Yarn Outwards":
+    st.markdown('<div class="page-header"><h1>🧵 Yarn Outwards</h1></div>', unsafe_allow_html=True)
+
+    def _yo_get_next_challan() -> str:
+        max_no = 100
+        for doc in db.collection("yarn_outward").stream():
+            val = str(doc.to_dict().get("ChallanNo", "")).strip()
+            if val.isdigit():
+                max_no = max(max_no, int(val))
+        return str(max_no + 1)
+
+    def _yo_build_challan_html(header: dict, lots: list) -> str:
+        raw_date = header.get("Date", "")
+        disp_date = _fmt_date(raw_date)
+        total_qty = 0.0
+        lot_rows_html = ""
+        for i, lot in enumerate(lots, 1):
+            bg = "" if i % 2 == 0 else "background:#f9f9f9;"
+            try: total_qty += float(lot.get("Quantity", 0) or 0)
+            except Exception: pass
+            lot_rows_html += f"""
+            <tr style="{bg}">
+              <td style="text-align:center">{i}</td>
+              <td>{lot.get("LotNo","")}</td>
+              <td>{lot.get("YarnCount","")}</td>
+              <td>{lot.get("Colour","")}</td>
+              <td style="text-align:right">{lot.get("Quantity","")}</td>
+              <td>{lot.get("Remarks","")}</td>
+            </tr>"""
+        grand_row = f"""
+            <tr style="background:#dce6f7;font-weight:bold;border-top:2px solid #1a3c6e;">
+              <td colspan="4" style="text-align:right;padding:5px 8px;">GRAND TOTAL</td>
+              <td style="text-align:right;padding:5px 8px;">{round(total_qty,2)}</td>
+              <td></td>
+            </tr>"""
+        return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
+.print-btn{{background:#1a3c6e;color:white;border:none;padding:8px 24px;font-size:11pt;cursor:pointer;border-radius:4px;margin-bottom:10px;display:block}}
+@media print{{.print-btn{{display:none!important}}}}
+.header-box{{border:1.5px solid #333;margin-bottom:8px}}
+.co-name{{text-align:center;font-size:14pt;font-weight:bold;padding:6px 8px;border-bottom:1px solid #333}}
+.challan-title{{text-align:center;font-size:11pt;font-weight:bold;padding:4px 8px;border-bottom:1px solid #333}}
+.hdr-table{{width:100%;border-collapse:collapse;font-size:9.5pt}}
+.hdr-table td{{padding:3px 8px}}
+.lbl{{font-weight:bold;width:90px}}
+.lots-table{{width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:6px}}
+.lots-table th,.lots-table td{{border:1px solid #aaa;padding:4px 6px}}
+.lots-table thead tr{{background:#1a3c6e;color:white}}
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ Print Challan</button>
+<div class="header-box">
+  <div class="co-name">LOVELY KNITFAB PVT LTD</div>
+  <div class="challan-title">YARN OUTWARD CHALLAN</div>
+  <table class="hdr-table">
+    <tr><td class="lbl">Challan No</td><td>{header.get("ChallanNo","")}</td><td class="lbl">Date</td><td>{disp_date}</td></tr>
+    <tr><td class="lbl">Party</td><td>{header.get("PartyName","")}</td><td class="lbl">Vehicle No</td><td>{header.get("VehicleNo","")}</td></tr>
+  </table>
+</div>
+<table class="lots-table">
+  <thead><tr><th>#</th><th>Lot No</th><th>Yarn Count</th><th>Colour</th><th>Quantity (Kg)</th><th>Remarks</th></tr></thead>
+  <tbody>{lot_rows_html}{grand_row}</tbody>
+</table>
+</body></html>"""
+
+    if "yo_result"     not in st.session_state: st.session_state.yo_result     = None
+    if "yo_challan_no" not in st.session_state: st.session_state.yo_challan_no = _yo_get_next_challan()
+    if "yo_lots"       not in st.session_state: st.session_state.yo_lots       = []
+
+    tab_yo_add, tab_yo_view = st.tabs(["📝 New Challan", "📋 View Records"])
+
+    with tab_yo_add:
+        st.success(f"Challan No: **{st.session_state.yo_challan_no}**")
+        st.markdown("#### Challan Details")
+        yh1, yh2, yh3 = st.columns(3)
+        with yh1:
+            yo_date     = st.date_input("Date", value=date.today(), format="DD/MM/YYYY", key="yo_date")
+            yo_date_str = yo_date.strftime("%Y-%m-%d")
+        with yh2:
+            yo_processors = get_processor_list()
+            yo_party = st.selectbox("Processor", yo_processors, key="yo_party") if yo_processors else ""
+            if not yo_processors:
+                st.warning("Add a processor in Processor Master first")
+        with yh3:
+            yo_vehicle = st.text_input("Vehicle No", key="yo_vehicle")
+
+        st.divider()
+        st.markdown("#### Add Lot")
+        yl1, yl2 = st.columns(2)
+        with yl1:
+            yo_lot_no     = st.text_input("Lot No", key="yo_lot_no")
+            yo_yarn_count = st.text_input("Yarn Count", key="yo_yarn_count")
+            yo_colour     = st.text_input("Colour", value="Greige", key="yo_colour")
+        with yl2:
+            yo_qty     = st.number_input("Quantity (Kg)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="yo_qty")
+            yo_remarks = st.text_input("Remarks", key="yo_remarks")
+
+        if st.button("➕ Add Lot to Challan", key="yo_add_lot"):
+            if not yo_lot_no.strip():
+                st.error("Enter a Lot No")
+            elif not (yo_qty or 0) > 0:
+                st.error("Enter Quantity")
+            else:
+                st.session_state.yo_lots.append({
+                    "LotNo":     yo_lot_no.strip().upper(),
+                    "YarnCount": yo_yarn_count.strip(),
+                    "Colour":    yo_colour.strip() or "Greige",
+                    "Quantity":  float(yo_qty or 0),
+                    "Remarks":   yo_remarks.strip(),
+                })
+                st.rerun()
+
+        if st.session_state.yo_lots:
+            st.markdown("#### Lots in this Challan")
+            st.dataframe(pd.DataFrame(st.session_state.yo_lots), use_container_width=True, hide_index=True)
+            rm_cols = st.columns(len(st.session_state.yo_lots))
+            for i, lot in enumerate(st.session_state.yo_lots):
+                if rm_cols[i].button(f"❌ {lot['LotNo']}", key=f"yo_rm_{i}"):
+                    st.session_state.yo_lots.pop(i)
+                    st.rerun()
+            st.divider()
+            if st.button("💾 Save Challan", type="primary", key="yo_save"):
+                if not yo_party:
+                    st.error("Select a Processor")
+                else:
+                    challan_no = st.session_state.yo_challan_no
+                    header = {"ChallanNo": challan_no, "Date": yo_date_str, "PartyName": yo_party, "VehicleNo": yo_vehicle.strip()}
+                    with st.spinner("Saving..."):
+                        for i, lot in enumerate(st.session_state.yo_lots):
+                            db.collection("yarn_outward").document(f"{challan_no}_{lot['LotNo']}_{i}").set({**header, **lot})
+                        challan_html = _yo_build_challan_html(header, st.session_state.yo_lots)
+                    st.session_state.yo_result     = {"challan_no": challan_no, "challan_html": challan_html}
+                    st.session_state.yo_challan_no = str(int(challan_no) + 1)
+                    st.session_state.yo_lots       = []
+                    st.session_state.pop("_yo_view_rows", None)
+                    st.rerun()
+        else:
+            st.info("No lots added yet — use the form above to add lots to this challan.")
+
+        if st.session_state.yo_result:
+            res = st.session_state.yo_result
+            st.success(f"✅ Challan **{res['challan_no']}** saved")
+            import streamlit.components.v1 as _yo_cv1
+            _yo_cv1.html(res["challan_html"], height=700, scrolling=True)
+
+    with tab_yo_view:
+        _yov_h, _yov_r = st.columns([5, 1])
+        with _yov_r:
+            if st.button("🔄 Refresh", key="yo_view_refresh", use_container_width=True):
+                st.session_state.pop("_yo_view_rows", None)
+        if "_yo_view_rows" not in st.session_state:
+            _raw = []
+            for doc in db.collection("yarn_outward").stream():
+                _d = doc.to_dict(); _d["Date"] = _fmt_date(_d.get("Date",""))
+                _raw.append(_d)
+            st.session_state["_yo_view_rows"] = _raw
+        yo_view_rows = st.session_state["_yo_view_rows"]
+        if yo_view_rows:
+            _yo_vdf = pd.DataFrame(yo_view_rows)
+            _yo_want = ["ChallanNo","Date","PartyName","LotNo","YarnCount","Colour","Quantity","Remarks"]
+            _yo_vcols = [c for c in _yo_want if c in _yo_vdf.columns]
+            _yo_vdf2 = _yo_vdf[_yo_vcols].copy()
+            _yo_vdf2["_s"] = pd.to_numeric(_yo_vdf2["ChallanNo"], errors="coerce")
+            st.dataframe(_yo_vdf2.sort_values("_s", ascending=False).drop(columns=["_s"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No Yarn Outward records yet.")
+
+# ═════════════════════════════════════════════════════════
+elif menu == "Yarn Inwards":
+    st.markdown('<div class="page-header"><h1>🧶 Yarn Inwards</h1></div>', unsafe_allow_html=True)
+
+    def _yi_compute_pending(party: str) -> list:
+        out_docs = [d.to_dict() for d in db.collection("yarn_outward").where("PartyName","==",party).stream()]
+        challan_qty  = {}
+        challan_date = {}
+        for d in out_docs:
+            cn  = str(d.get("ChallanNo","")).strip()
+            qty = float(d.get("Quantity", 0) or 0)
+            challan_qty[cn]  = challan_qty.get(cn, 0) + qty
+            if cn not in challan_date:
+                challan_date[cn] = d.get("Date","")
+        in_docs = [d.to_dict() for d in db.collection("yarn_inward").where("PartyName","==",party).stream()]
+        cleared_map = {}
+        for d in in_docs:
+            for c in d.get("ClearedChallans", []):
+                cn  = str(c.get("ChallanNo",""))
+                qty = float(c.get("ClearedQty", 0) or 0)
+                cleared_map[cn] = cleared_map.get(cn, 0) + qty
+        pending = []
+        for cn, sent in challan_qty.items():
+            cleared = cleared_map.get(cn, 0)
+            pend    = round(sent - cleared, 3)
+            if pend > 0.001:
+                pending.append({"ChallanNo": cn, "SentQty": sent, "ClearedQty": cleared, "PendingQty": pend, "Date": challan_date.get(cn,"")})
+        pending.sort(key=lambda x: (x["Date"], int(x["ChallanNo"]) if x["ChallanNo"].isdigit() else 0))
+        return pending
+
+    def _yi_apply_fifo(pending: list, recv_qty: float):
+        remaining = recv_qty
+        cleared   = []
+        pend_copy = [dict(p) for p in pending]
+        for p in pend_copy:
+            if remaining <= 0: break
+            take = min(remaining, p["PendingQty"])
+            cleared.append({"ChallanNo": p["ChallanNo"], "ClearedQty": round(take, 3)})
+            p["PendingQty"] -= take
+            remaining       -= take
+        updated = [p for p in pend_copy if p["PendingQty"] > 0.001]
+        return cleared, updated, round(remaining, 3)
+
+    if "yi_lots" not in st.session_state: st.session_state.yi_lots = []
+
+    tab_yi_form, tab_yi_view = st.tabs(["📝 New Inward", "📋 View Records"])
+
+    with tab_yi_form:
+        yi_processors = get_processor_list()
+        yi_party = st.selectbox("Processor", yi_processors, key="yi_party") if yi_processors else ""
+        if not yi_processors:
+            st.warning("Add a processor in Processor Master first")
+
+        if st.session_state.get("_yi_cached_party") != yi_party:
+            st.session_state.yi_lots = []
+            st.session_state["_yi_cached_party"] = yi_party
+            st.session_state.pop("_yi_pending", None)
+
+        if yi_party:
+            if "_yi_pending" not in st.session_state:
+                with st.spinner("Loading pending yarn..."):
+                    st.session_state["_yi_pending"] = _yi_compute_pending(yi_party)
+
+            yi_pending      = st.session_state["_yi_pending"]
+            yi_total_pend   = round(sum(p["PendingQty"] for p in yi_pending), 2)
+            st.metric("Pending Yarn with Processor", f"{yi_total_pend:,.2f} Kg")
+
+            yi_date     = st.date_input("Date", value=date.today(), format="DD/MM/YYYY", key="yi_date")
+            yi_date_str = yi_date.strftime("%Y-%m-%d")
+
+            st.divider()
+            st.markdown("#### Add Lot")
+            yi_l1, yi_l2 = st.columns(2)
+            with yi_l1:
+                yi_lot_no       = st.text_input("Processor Lot No", key="yi_lot_no")
+                yi_colour       = st.text_input("Colour", key="yi_colour")
+            with yi_l2:
+                yi_recv_qty     = st.number_input("Quantity Received (Kg)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="yi_recv_qty")
+                yi_proc_challan = st.text_input("Processor's Challan No", key="yi_proc_challan")
+
+            if st.button("➕ Add Lot", key="yi_add_lot"):
+                if not yi_lot_no.strip():
+                    st.error("Enter Lot No")
+                elif not (yi_recv_qty or 0) > 0:
+                    st.error("Enter Quantity Received")
+                else:
+                    st.session_state.yi_lots.append({
+                        "LotNo":              yi_lot_no.strip().upper(),
+                        "Colour":             yi_colour.strip(),
+                        "ReceivedQty":        float(yi_recv_qty or 0),
+                        "ProcessorChallanNo": yi_proc_challan.strip(),
+                    })
+                    st.rerun()
+
+            if st.session_state.yi_lots:
+                st.markdown("#### Lots to Receive")
+                st.dataframe(pd.DataFrame(st.session_state.yi_lots), use_container_width=True, hide_index=True)
+                yi_rm_cols = st.columns(len(st.session_state.yi_lots))
+                for i, lot in enumerate(st.session_state.yi_lots):
+                    if yi_rm_cols[i].button(f"❌ {lot['LotNo']}", key=f"yi_rm_{i}"):
+                        st.session_state.yi_lots.pop(i)
+                        st.rerun()
+                st.divider()
+                if st.button("💾 Save Inward", type="primary", key="yi_save"):
+                    with st.spinner("Saving with FIFO..."):
+                        cur_pending = list(st.session_state["_yi_pending"])
+                        for idx, lot in enumerate(st.session_state.yi_lots):
+                            cleared, cur_pending, excess = _yi_apply_fifo(cur_pending, lot["ReceivedQty"])
+                            doc_id = f"{yi_date_str}_{yi_party}_{idx}_{lot['LotNo']}"
+                            db.collection("yarn_inward").document(doc_id).set({
+                                "Date":               yi_date_str,
+                                "PartyName":          yi_party,
+                                "LotNo":              lot["LotNo"],
+                                "Colour":             lot["Colour"],
+                                "ReceivedQty":        lot["ReceivedQty"],
+                                "ProcessorChallanNo": lot["ProcessorChallanNo"],
+                                "ClearedChallans":    cleared,
+                                "ExcessQty":          excess,
+                            })
+                    st.session_state.yi_lots = []
+                    st.session_state.pop("_yi_pending", None)
+                    st.session_state.pop("_yi_view_rows", None)
+                    st.success("✅ Inward saved successfully!")
+                    st.rerun()
+            else:
+                st.info("No lots added yet.")
+
+    with tab_yi_view:
+        _yiv_h, _yiv_r = st.columns([5, 1])
+        with _yiv_r:
+            if st.button("🔄 Refresh", key="yi_view_refresh", use_container_width=True):
+                st.session_state.pop("_yi_view_rows", None)
+        if "_yi_view_rows" not in st.session_state:
+            _yi_raw = []
+            for doc in db.collection("yarn_inward").stream():
+                _d = doc.to_dict()
+                _d["Date"] = _fmt_date(_d.get("Date",""))
+                _d["Cleared Against"] = ", ".join(
+                    f"C{c['ChallanNo']}({c['ClearedQty']}kg)"
+                    for c in _d.get("ClearedChallans", [])
+                )
+                _yi_raw.append(_d)
+            st.session_state["_yi_view_rows"] = _yi_raw
+        yi_view_rows = st.session_state["_yi_view_rows"]
+        if yi_view_rows:
+            _yi_vdf = pd.DataFrame(yi_view_rows)
+            _yi_want = ["Date","PartyName","LotNo","Colour","ReceivedQty","ProcessorChallanNo","Cleared Against"]
+            _yi_vcols = [c for c in _yi_want if c in _yi_vdf.columns]
+            st.dataframe(_yi_vdf[_yi_vcols].sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.info("No Yarn Inward records yet.")
+
+# ═════════════════════════════════════════════════════════
 elif menu == "Reports":
     import plotly.express as px
 
@@ -4608,6 +4932,74 @@ elif menu == "Reports":
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         key="itc_in_dl",
                     )
+
+     elif rpt_type == "🧵 Yarn Report":
+        st.markdown("### 🧵 Yarn Report — Challan-wise Pending")
+        st.caption("Outward challans with yarn still pending return from processor.")
+
+        if st.button("🔄 Refresh", key="yr_refresh"):
+            st.session_state.pop("_yr_data", None)
+
+        if "_yr_data" not in st.session_state:
+            with st.spinner("Loading..."):
+                _yr_out = [d.to_dict() for d in db.collection("yarn_outward").stream()]
+                _yr_in  = [d.to_dict() for d in db.collection("yarn_inward").stream()]
+                st.session_state["_yr_data"] = (_yr_out, _yr_in)
+
+        _yr_out_all, _yr_in_all = st.session_state["_yr_data"]
+
+        if not _yr_out_all:
+            st.info("No Yarn Outward records yet.")
+        else:
+            # Build cleared map: outward ChallanNo -> total qty cleared via inward
+            _yr_cleared = {}
+            for d in _yr_in_all:
+                for c in d.get("ClearedChallans", []):
+                    cn  = str(c.get("ChallanNo",""))
+                    qty = float(c.get("ClearedQty", 0) or 0)
+                    _yr_cleared[cn] = _yr_cleared.get(cn, 0) + qty
+
+            # Aggregate outward by challan
+            _yr_challan = {}
+            for d in _yr_out_all:
+                cn = str(d.get("ChallanNo","")).strip()
+                if cn not in _yr_challan:
+                    _yr_challan[cn] = {"ChallanNo": cn, "Date": d.get("Date",""), "Processor": d.get("PartyName",""), "SentQty": 0.0}
+                _yr_challan[cn]["SentQty"] += float(d.get("Quantity", 0) or 0)
+
+            # Compute pending rows
+            _yr_rows = []
+            for cn, info in _yr_challan.items():
+                cleared = _yr_cleared.get(cn, 0)
+                pending = round(info["SentQty"] - cleared, 2)
+                if pending > 0.001:
+                    _yr_rows.append({
+                        "Challan No":  cn,
+                        "Date":        _fmt_date(info["Date"]),
+                        "Processor":   info["Processor"],
+                        "Sent Qty":    round(info["SentQty"], 2),
+                        "Cleared Qty": round(cleared, 2),
+                        "Pending Qty": pending,
+                    })
+
+            if not _yr_rows:
+                st.success("✅ No pending yarn — all challans fully returned.")
+            else:
+                _yr_df = pd.DataFrame(_yr_rows)
+                _yr_df["_s"] = pd.to_numeric(_yr_df["Challan No"], errors="coerce")
+                _yr_df = _yr_df.sort_values(["Processor","_s"], ascending=True).drop(columns=["_s"])
+
+                # Processor filter
+                _yr_procs = ["All"] + sorted(_yr_df["Processor"].unique().tolist())
+                _yr_sel   = st.selectbox("Filter by Processor", _yr_procs, key="yr_proc_filter")
+                if _yr_sel != "All":
+                    _yr_df = _yr_df[_yr_df["Processor"] == _yr_sel]
+
+                yk1, yk2 = st.columns(2)
+                yk1.metric("Pending Challans", len(_yr_df))
+                yk2.metric("Total Pending Qty", f"{_yr_df['Pending Qty'].sum():,.2f} Kg")
+                st.divider()
+                st.dataframe(_yr_df, use_container_width=True, hide_index=True)
 
      elif rpt_type == "__removed__":
         pass  # Print Packing List moved to Packing form tab
