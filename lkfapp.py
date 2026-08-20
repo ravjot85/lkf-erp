@@ -343,6 +343,8 @@ with st.sidebar:
         ("✏️", "Edit Process Out"),
         ("✏️", "Edit Process Inward"),
         ("🚫", "Cancel Shoot Order"),
+        ("✏️", "Edit Yarn Outwards"),
+        ("✏️", "Edit Yarn Inwards"),
     ]
     with st.expander("✏️  Edits",
                      expanded=st.session_state.page in [p for _,p in _EDITS]):
@@ -5799,6 +5801,204 @@ elif menu == "Edit Process Inward":
                 st.success(f"✅ Process Inward Challan {epi_challan.strip()} updated successfully")
 
 
+# ═════════════════════════════════════════════════════════
+#  EDIT YARN OUTWARDS
+# ═════════════════════════════════════════════════════════
+elif menu == "Edit Yarn Outwards":
+    st.markdown('<div class="page-header"><h1>✏️ Edit Yarn Outwards</h1></div>', unsafe_allow_html=True)
+
+    eyo_challan = st.text_input("Enter Challan No", key="eyo_challan_no")
+
+    if eyo_challan.strip():
+        eyo_cn = eyo_challan.strip()
+        eyo_docs = [doc for doc in db.collection("yarn_outward").stream()
+                    if str(doc.to_dict().get("ChallanNo","")).strip() == eyo_cn]
+
+        if not eyo_docs:
+            st.error(f"No Yarn Outward records found for Challan No {eyo_cn}")
+        else:
+            first_yo = eyo_docs[0].to_dict()
+            st.success(f"Found {len(eyo_docs)} lot(s) for Challan {eyo_cn}")
+
+            # ── Editable header ──
+            st.markdown("#### Challan Header")
+            eyoh1, eyoh2, eyoh3 = st.columns(3)
+            with eyoh1:
+                from datetime import datetime as _eyodt, date as _eyodate
+                try:
+                    eyo_date_val = _eyodt.strptime(first_yo.get("Date",""), "%Y-%m-%d").date()
+                except Exception:
+                    eyo_date_val = _eyodate.today()
+                eyo_date = st.date_input("Date", value=eyo_date_val, format="DD/MM/YYYY", key="eyo_hdr_date")
+            with eyoh2:
+                eyo_procs = get_processor_list()
+                eyo_party = st.selectbox("Processor", eyo_procs,
+                                         index=eyo_procs.index(first_yo.get("PartyName",""))
+                                         if first_yo.get("PartyName","") in eyo_procs else 0,
+                                         key="eyo_hdr_party") if eyo_procs else st.text_input(
+                                             "Processor", value=first_yo.get("PartyName",""), key="eyo_hdr_party_txt")
+            with eyoh3:
+                eyo_vehicle = st.text_input("Vehicle No", value=first_yo.get("VehicleNo",""), key="eyo_hdr_veh")
+
+            st.divider()
+            st.markdown("#### Lots")
+
+            eyo_updates = {}
+            for doc in eyo_docs:
+                lot    = doc.to_dict()
+                lot_no = lot.get("LotNo","")
+                with st.expander(f"Lot: {lot_no}  |  {lot.get('YarnCount','')}  |  {lot.get('Colour','')}  |  {lot.get('Quantity','')} Kg",
+                                 expanded=False):
+                    ey1, ey2 = st.columns(2)
+                    with ey1:
+                        e_lot_no     = st.text_input("Lot No",     value=lot_no,                           key=f"eyo_ln_{doc.id}")
+                        e_yarn_count = st.text_input("Yarn Count", value=lot.get("YarnCount",""),          key=f"eyo_yc_{doc.id}")
+                        e_colour     = st.text_input("Colour",     value=lot.get("Colour","Greige"),       key=f"eyo_col_{doc.id}")
+                    with ey2:
+                        e_qty     = st.number_input("Quantity (Kg)", min_value=0.0, step=0.5,
+                                                    value=float(lot.get("Quantity",0) or 0),              key=f"eyo_qty_{doc.id}")
+                        e_remarks = st.text_input("Remarks",  value=lot.get("Remarks",""),                key=f"eyo_rem_{doc.id}")
+
+                    del_chk = st.checkbox(f"Confirm delete Lot **{lot_no}**", key=f"eyo_del_chk_{doc.id}")
+                    if st.button("🗑️ Delete this Lot", key=f"eyo_del_btn_{doc.id}", disabled=not del_chk):
+                        db.collection("yarn_outward").document(doc.id).delete()
+                        st.session_state.pop("_yo_view_rows", None)
+                        st.success(f"Lot {lot_no} deleted.")
+                        st.rerun()
+
+                    eyo_updates[doc.id] = {
+                        "LotNo":     e_lot_no.strip().upper(),
+                        "YarnCount": e_yarn_count.strip(),
+                        "Colour":    e_colour.strip() or "Greige",
+                        "Quantity":  float(e_qty),
+                        "Remarks":   e_remarks.strip(),
+                    }
+
+            if st.button("💾 Save All Changes", type="primary", key="eyo_save_all"):
+                hdr_yo = {
+                    "Date":      eyo_date.strftime("%Y-%m-%d"),
+                    "PartyName": eyo_party,
+                    "VehicleNo": eyo_vehicle.strip(),
+                }
+                for doc_id, lot_data in eyo_updates.items():
+                    db.collection("yarn_outward").document(doc_id).update({**hdr_yo, **lot_data})
+                st.session_state.pop("_yo_view_rows", None)
+                st.success(f"✅ Yarn Outward Challan {eyo_cn} updated successfully")
+
+            st.divider()
+            st.markdown("#### ➕ Add New Lot to this Challan")
+            with st.expander("Add Lot", expanded=False):
+                eyo_al1, eyo_al2 = st.columns(2)
+                with eyo_al1:
+                    new_yo_lot_no     = st.text_input("Lot No",     key="eyo_new_ln")
+                    new_yo_yarn_count = st.text_input("Yarn Count", key="eyo_new_yc")
+                    new_yo_colour     = st.text_input("Colour", value="Greige", key="eyo_new_col")
+                with eyo_al2:
+                    new_yo_qty     = st.number_input("Quantity (Kg)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="eyo_new_qty")
+                    new_yo_remarks = st.text_input("Remarks", key="eyo_new_rem")
+
+                if st.button("➕ Add Lot", key="eyo_new_add_btn"):
+                    if not new_yo_lot_no.strip():
+                        st.error("Enter a Lot No")
+                    else:
+                        new_idx    = len(eyo_docs)
+                        new_doc_id = f"{eyo_cn}_{new_yo_lot_no.strip().upper()}_{new_idx}"
+                        db.collection("yarn_outward").document(new_doc_id).set({
+                            "ChallanNo": eyo_cn,
+                            "Date":      eyo_date.strftime("%Y-%m-%d"),
+                            "PartyName": eyo_party,
+                            "VehicleNo": eyo_vehicle.strip(),
+                            "LotNo":     new_yo_lot_no.strip().upper(),
+                            "YarnCount": new_yo_yarn_count.strip(),
+                            "Colour":    new_yo_colour.strip() or "Greige",
+                            "Quantity":  float(new_yo_qty or 0),
+                            "Remarks":   new_yo_remarks.strip(),
+                        })
+                        for k in ["eyo_new_ln","eyo_new_yc","eyo_new_col","eyo_new_qty","eyo_new_rem"]:
+                            st.session_state.pop(k, None)
+                        st.session_state.pop("_yo_view_rows", None)
+                        st.success(f"✅ Lot {new_yo_lot_no.strip().upper()} added to Challan {eyo_cn}")
+                        st.rerun()
+
+# ═════════════════════════════════════════════════════════
+#  EDIT YARN INWARDS
+# ═════════════════════════════════════════════════════════
+elif menu == "Edit Yarn Inwards":
+    st.markdown('<div class="page-header"><h1>✏️ Edit Yarn Inwards</h1></div>', unsafe_allow_html=True)
+    st.caption("Search by Processor and Date to find inward records.")
+
+    eyi_procs = get_processor_list()
+    eyi_party = st.selectbox("Processor", eyi_procs, key="eyi_party") if eyi_procs else ""
+
+    from datetime import date as _eyi_date_cls
+    eyi_date     = st.date_input("Date", value=_eyi_date_cls.today(), format="DD/MM/YYYY", key="eyi_date")
+    eyi_date_str = eyi_date.strftime("%Y-%m-%d")
+
+    if eyi_party and st.button("🔍 Search", key="eyi_search"):
+        st.session_state["_eyi_results"] = [
+            doc for doc in db.collection("yarn_inward")
+            .where("PartyName","==",eyi_party)
+            .where("Date","==",eyi_date_str).stream()
+        ]
+
+    if "_eyi_results" in st.session_state:
+        eyi_docs = st.session_state["_eyi_results"]
+        if not eyi_docs:
+            st.error(f"No Yarn Inward records found for {eyi_party} on {_fmt_date(eyi_date_str)}")
+        else:
+            st.success(f"Found {len(eyi_docs)} lot(s) for {eyi_party} on {_fmt_date(eyi_date_str)}")
+            st.divider()
+            st.markdown("#### Lots")
+
+            eyi_updates = {}
+            for doc in eyi_docs:
+                lot    = doc.to_dict()
+                lot_no = lot.get("LotNo","")
+                cleared_str = ", ".join(
+                    f"C{c['ChallanNo']}({c['ClearedQty']}kg)"
+                    for c in lot.get("ClearedChallans",[])
+                )
+                with st.expander(f"Lot: {lot_no}  |  {lot.get('Colour','')}  |  {lot.get('ReceivedQty','')} Kg  |  Proc Challan: {lot.get('ProcessorChallanNo','')}",
+                                 expanded=False):
+                    ei1, ei2 = st.columns(2)
+                    with ei1:
+                        e_yi_lot_no    = st.text_input("Lot No",    value=lot_no,                              key=f"eyi_ln_{doc.id}")
+                        e_yi_colour    = st.text_input("Colour",    value=lot.get("Colour",""),                key=f"eyi_col_{doc.id}")
+                        e_yi_proc_chal = st.text_input("Processor Challan No", value=lot.get("ProcessorChallanNo",""), key=f"eyi_pc_{doc.id}")
+                    with ei2:
+                        e_yi_recv_qty  = st.number_input("Received Qty (Kg)", min_value=0.0, step=0.5,
+                                                         value=float(lot.get("ReceivedQty",0) or 0),          key=f"eyi_rq_{doc.id}")
+                        if cleared_str:
+                            st.text_input("Cleared Against (FIFO)", value=cleared_str, disabled=True, key=f"eyi_cl_{doc.id}")
+
+                    del_chk_yi = st.checkbox(f"Confirm delete Lot **{lot_no}**", key=f"eyi_del_chk_{doc.id}")
+                    if st.button("🗑️ Delete this Lot", key=f"eyi_del_btn_{doc.id}", disabled=not del_chk_yi):
+                        db.collection("yarn_inward").document(doc.id).delete()
+                        st.session_state.pop("_eyi_results", None)
+                        st.session_state.pop("_yi_view_rows", None)
+                        st.success(f"Lot {lot_no} deleted.")
+                        st.rerun()
+
+                    eyi_updates[doc.id] = {
+                        "LotNo":              e_yi_lot_no.strip().upper(),
+                        "Colour":             e_yi_colour.strip(),
+                        "ReceivedQty":        float(e_yi_recv_qty),
+                        "ProcessorChallanNo": e_yi_proc_chal.strip(),
+                    }
+
+            if st.button("💾 Save All Changes", type="primary", key="eyi_save_all"):
+                for doc_id, lot_data in eyi_updates.items():
+                    db.collection("yarn_inward").document(doc_id).update({
+                        "Date":      eyi_date_str,
+                        "PartyName": eyi_party,
+                        **lot_data,
+                    })
+                st.session_state.pop("_eyi_results", None)
+                st.session_state.pop("_yi_view_rows", None)
+                st.session_state.pop("_yr_data", None)
+                st.success(f"✅ Yarn Inward records for {eyi_party} on {_fmt_date(eyi_date_str)} updated successfully")
+
+# ═════════════════════════════════════════════════════════
 elif menu == "Cancel Shoot Order":
     st.markdown('<div class="page-header"><h1>🚫 Cancel Shoot Order</h1></div>', unsafe_allow_html=True)
 
