@@ -56,9 +56,12 @@ def _sa_info() -> dict:
 
 if not firebase_admin._apps:
     cred = credentials.Certificate(_sa_info())
-    firebase_admin.initialize_app(cred, {
-        "storageBucket": "lkf-erp-12c7d.firebasestorage.app"
-    })
+    try:
+        firebase_admin.initialize_app(cred, {
+            "storageBucket": "lkf-erp-12c7d.firebasestorage.app"
+        })
+    except ValueError:
+        pass
 
 db = firestore.client()
 
