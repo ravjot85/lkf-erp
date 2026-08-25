@@ -526,7 +526,7 @@ def build_po_pdf(d: dict, image_bytes: bytes = None) -> bytes:
     )
     styles = getSampleStyleSheet()
     elements = []
-    _pdf_header(elements, styles, "PURCHASE ORDER")
+    _pdf_header(elements, styles, "SALES ORDER")
 
     rows = [
         ["Order ID",       str(d.get("OrderId", "")),          "Date",             str(d.get("Date", ""))],
