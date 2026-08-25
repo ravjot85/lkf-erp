@@ -647,14 +647,25 @@ def get_processor_list():
 # ═════════════════════════════════════════════════════════
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_status_df():
-    po_docs       = [d.to_dict() for d in db.collection("po").stream()]
-    shoot_raw     = [d.to_dict() for d in db.collection("shoot_order").stream()]
+    import sys as _sys, traceback as _tb
+    def _stream(col):
+        try:
+            return [d.to_dict() for d in db.collection(col).stream()]
+        except Exception as _e:
+            # Print full error to stderr — visible in Streamlit Cloud logs
+            print(f"[LKF] Firestore stream error on '{col}': {type(_e).__name__}: {_e}", file=_sys.stderr)
+            _tb.print_exc(file=_sys.stderr)
+            raise
+    po_docs       = _stream("po")
+    shoot_raw     = _stream("shoot_order")
     shoot_dates   = {d.get("OrderId",""): d.get("Date","") for d in shoot_raw if d.get("OrderId","")}
     shoot_ids     = set(shoot_dates.keys())
-    proc_out_raw  = [d.to_dict() for d in db.collection("process_out").stream()]
-    proc_in_ids   = {d.to_dict().get("OrderId","") for d in db.collection("process_inward").stream()}
-    cancel_ids    = {d.to_dict().get("OrderId","") for d in db.collection("cancel_orders").stream()
-                     if d.to_dict().get("Status","VALID").upper().strip() != "INVALID"}
+    proc_out_raw  = _stream("process_out")
+    proc_in_raw   = _stream("process_inward")
+    proc_in_ids   = {d.get("OrderId","") for d in proc_in_raw}
+    cancel_raw    = _stream("cancel_orders")
+    cancel_ids    = {d.get("OrderId","") for d in cancel_raw
+                     if d.get("Status","VALID").upper().strip() != "INVALID"}
 
     # Load packing list data — group by BASE numeric OrderId
     # e.g. "1001A", "1001B", "1001" all map to base "1001"
