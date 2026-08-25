@@ -1242,7 +1242,7 @@ elif menu == "Customer Master":
                     batch = db.batch()
                     count = 0
                     for d in docs:
-                        batch.update(d.reference, {"Customer name": new_name})
+                        batch.set(d.reference, {"Customer name": new_name}, merge=True)
                         count += 1
                         total += 1
                         if count == 499:
@@ -5341,7 +5341,7 @@ elif menu == "Edit PO":
                         except Exception as e:
                             st.warning(f"Image upload failed: {e}")
 
-                db.collection("po").document(search_id.strip()).update(update_data)
+                db.collection("po").document(search_id.strip()).set(update_data, merge=True)
                 st.success(f"✅ PO {search_id} updated successfully")
 
             # ── Delete PO ──
@@ -5416,7 +5416,7 @@ elif menu == "Edit Packing List":
                     "AccessoryDetails": e_acc.strip(),
                 }
                 for doc in pack_docs:
-                    db.collection("PackingListRaw").document(doc.id).update(update_payload)
+                    db.collection("PackingListRaw").document(doc.id).set(update_payload, merge=True)
                 if new_oid != search_oid.strip():
                     st.success(f"✅ Order ID corrected from **{search_oid.strip()}** → **{new_oid}** across {len(pack_docs)} slip(s)")
                 else:
@@ -5621,7 +5621,7 @@ elif menu == "Edit Process Out":
                     "VehicleNo": epo_vehicle.strip(),
                 }
                 for doc_id, lot_data in lot_updates.items():
-                    db.collection("process_out").document(doc_id).update({**hdr_update, **lot_data})
+                    db.collection("process_out").document(doc_id).set({**hdr_update, **lot_data}, merge=True)
                 st.success(f"✅ Process Out Challan {epo_challan.strip()} updated successfully")
 
             st.divider()
@@ -6501,7 +6501,7 @@ elif menu == "Import Data":
                                     # This prevents overwriting existing fields with empty values
                                     update_data = {k: doc_data[k] for k in rec if k in doc_data}
                                     update_data["OrderId"] = oid
-                                    db.collection("po").document(oid).update(update_data)
+                                    db.collection("po").document(oid).set(update_data, merge=True)
                                     upd_cnt += 1
                             else:
                                 db.collection("po").document(oid).set(doc_data)
