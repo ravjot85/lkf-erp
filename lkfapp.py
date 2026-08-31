@@ -3408,7 +3408,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
     if "yo_challan_no" not in st.session_state: st.session_state.yo_challan_no = _yo_get_next_challan()
     if "yo_lots"       not in st.session_state: st.session_state.yo_lots       = []
 
-    tab_yo_add, tab_yo_view = st.tabs(["📝 New Challan", "📋 View Records"])
+    tab_yo_add, tab_yo_print, tab_yo_view = st.tabs(["📝 New Challan", "🖨️ Print Challan", "📋 View Records"])
 
     with tab_yo_add:
         st.success(f"Challan No: **{st.session_state.yo_challan_no}**")
@@ -3485,6 +3485,27 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
             st.success(f"✅ Challan **{res['challan_no']}** saved")
             import streamlit.components.v1 as _yo_cv1
             _yo_cv1.html(res["challan_html"], height=700, scrolling=True)
+
+    with tab_yo_print:
+        pc_challan = st.text_input("Enter Challan No", value="YD-", key="yo_print_challan_no")
+
+        if pc_challan.strip() and pc_challan.strip().upper() != "YD-":
+            pc_cn = pc_challan.strip()
+            pc_docs = [doc.to_dict() for doc in db.collection("yarn_outward").stream()
+                       if str(doc.to_dict().get("ChallanNo","")).strip().upper() == pc_cn.upper()]
+
+            if not pc_docs:
+                st.error(f"No Yarn Outward records found for Challan No {pc_cn}")
+            else:
+                pc_header = {
+                    "ChallanNo": pc_docs[0].get("ChallanNo",""),
+                    "Date":      pc_docs[0].get("Date",""),
+                    "PartyName": pc_docs[0].get("PartyName",""),
+                    "VehicleNo": pc_docs[0].get("VehicleNo",""),
+                }
+                st.success(f"Found {len(pc_docs)} lot(s) for Challan {pc_header['ChallanNo']}")
+                import streamlit.components.v1 as _yo_pcv1
+                _yo_pcv1.html(_yo_build_challan_html(pc_header, pc_docs), height=700, scrolling=True)
 
     with tab_yo_view:
         _yov_h, _yov_r = st.columns([5, 1])
