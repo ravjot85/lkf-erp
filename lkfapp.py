@@ -3349,10 +3349,13 @@ elif menu == "Yarn Outwards":
         raw_date = header.get("Date", "")
         disp_date = _fmt_date(raw_date)
         total_qty = 0.0
+        total_bags = 0
         lot_rows_html = ""
         for i, lot in enumerate(lots, 1):
             bg = "" if i % 2 == 0 else "background:#f9f9f9;"
             try: total_qty += float(lot.get("Quantity", 0) or 0)
+            except Exception: pass
+            try: total_bags += int(lot.get("Bags", 0) or 0)
             except Exception: pass
             lot_rows_html += f"""
             <tr style="{bg}">
@@ -3361,12 +3364,14 @@ elif menu == "Yarn Outwards":
               <td>{lot.get("YarnCount","")}</td>
               <td>{lot.get("Colour","")}</td>
               <td style="text-align:right">{lot.get("Quantity","")}</td>
+              <td style="text-align:right">{lot.get("Bags","")}</td>
               <td>{lot.get("Remarks","")}</td>
             </tr>"""
         grand_row = f"""
             <tr style="background:#dce6f7;font-weight:bold;border-top:2px solid #1a3c6e;">
               <td colspan="4" style="text-align:right;padding:5px 8px;">GRAND TOTAL</td>
               <td style="text-align:right;padding:5px 8px;">{round(total_qty,2)}</td>
+              <td style="text-align:right;padding:5px 8px;">{total_bags}</td>
               <td></td>
             </tr>"""
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -3394,7 +3399,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
   </table>
 </div>
 <table class="lots-table">
-  <thead><tr><th>#</th><th>Lot No</th><th>Yarn Count</th><th>Colour</th><th>Quantity (Kg)</th><th>Remarks</th></tr></thead>
+  <thead><tr><th>#</th><th>Lot No</th><th>Yarn Count</th><th>Colour</th><th>Quantity (Kg)</th><th>Bags</th><th>Remarks</th></tr></thead>
   <tbody>{lot_rows_html}{grand_row}</tbody>
 </table>
 </body></html>"""
@@ -3429,6 +3434,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
             yo_colour     = st.text_input("Colour", value="Greige", key="yo_colour")
         with yl2:
             yo_qty     = st.number_input("Quantity (Kg)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="yo_qty")
+            yo_bags    = st.number_input("Number of Bags", min_value=0, value=None, placeholder="0", step=1, key="yo_bags")
             yo_remarks = st.text_input("Remarks", key="yo_remarks")
 
         if st.button("➕ Add Lot to Challan", key="yo_add_lot"):
@@ -3442,6 +3448,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
                     "YarnCount": yo_yarn_count.strip(),
                     "Colour":    yo_colour.strip() or "Greige",
                     "Quantity":  float(yo_qty or 0),
+                    "Bags":      int(yo_bags or 0),
                     "Remarks":   yo_remarks.strip(),
                 })
                 st.rerun()
@@ -3493,7 +3500,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
         yo_view_rows = st.session_state["_yo_view_rows"]
         if yo_view_rows:
             _yo_vdf = pd.DataFrame(yo_view_rows)
-            _yo_want = ["ChallanNo","Date","PartyName","LotNo","YarnCount","Colour","Quantity","Remarks"]
+            _yo_want = ["ChallanNo","Date","PartyName","LotNo","YarnCount","Colour","Quantity","Bags","Remarks"]
             _yo_vcols = [c for c in _yo_want if c in _yo_vdf.columns]
             _yo_vdf2 = _yo_vdf[_yo_vcols].copy()
             _yo_vdf2["_s"] = _yo_vdf2["ChallanNo"].apply(_yd_challan_num)
@@ -5877,6 +5884,8 @@ elif menu == "Edit Yarn Outwards":
                     with ey2:
                         e_qty     = st.number_input("Quantity (Kg)", min_value=0.0, step=0.5,
                                                     value=float(lot.get("Quantity",0) or 0),              key=f"eyo_qty_{doc.id}")
+                        e_bags    = st.number_input("Number of Bags", min_value=0, step=1,
+                                                    value=int(lot.get("Bags",0) or 0),                    key=f"eyo_bags_{doc.id}")
                         e_remarks = st.text_input("Remarks",  value=lot.get("Remarks",""),                key=f"eyo_rem_{doc.id}")
 
                     del_chk = st.checkbox(f"Confirm delete Lot **{lot_no}**", key=f"eyo_del_chk_{doc.id}")
@@ -5891,6 +5900,7 @@ elif menu == "Edit Yarn Outwards":
                         "YarnCount": e_yarn_count.strip(),
                         "Colour":    e_colour.strip() or "Greige",
                         "Quantity":  float(e_qty),
+                        "Bags":      int(e_bags),
                         "Remarks":   e_remarks.strip(),
                     }
 
@@ -5915,6 +5925,7 @@ elif menu == "Edit Yarn Outwards":
                     new_yo_colour     = st.text_input("Colour", value="Greige", key="eyo_new_col")
                 with eyo_al2:
                     new_yo_qty     = st.number_input("Quantity (Kg)", min_value=0.0, value=None, placeholder="0.00", step=0.5, key="eyo_new_qty")
+                    new_yo_bags    = st.number_input("Number of Bags", min_value=0, value=None, placeholder="0", step=1, key="eyo_new_bags")
                     new_yo_remarks = st.text_input("Remarks", key="eyo_new_rem")
 
                 if st.button("➕ Add Lot", key="eyo_new_add_btn"):
@@ -5932,9 +5943,10 @@ elif menu == "Edit Yarn Outwards":
                             "YarnCount": new_yo_yarn_count.strip(),
                             "Colour":    new_yo_colour.strip() or "Greige",
                             "Quantity":  float(new_yo_qty or 0),
+                            "Bags":      int(new_yo_bags or 0),
                             "Remarks":   new_yo_remarks.strip(),
                         })
-                        for k in ["eyo_new_ln","eyo_new_yc","eyo_new_col","eyo_new_qty","eyo_new_rem"]:
+                        for k in ["eyo_new_ln","eyo_new_yc","eyo_new_col","eyo_new_qty","eyo_new_bags","eyo_new_rem"]:
                             st.session_state.pop(k, None)
                         st.session_state.pop("_yo_view_rows", None)
                         st.success(f"✅ Lot {new_yo_lot_no.strip().upper()} added to Challan {eyo_cn}")
