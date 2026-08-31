@@ -637,6 +637,14 @@ def _fmt_date(s: str) -> str:
         return str(s)
 
 
+def _yd_challan_num(val) -> int:
+    """Numeric part of a Yarn Outward challan no, e.g. 'YD-101' -> 101. Returns 0 if unparseable."""
+    val = str(val or "").strip().upper()
+    if val.startswith("YD-"):
+        val = val[3:]
+    return int(val) if val.isdigit() else 0
+
+
 def get_item_list():
     return sorted(doc.id for doc in db.collection("item_master").stream())
 
@@ -3334,10 +3342,8 @@ elif menu == "Yarn Outwards":
     def _yo_get_next_challan() -> str:
         max_no = 100
         for doc in db.collection("yarn_outward").stream():
-            val = str(doc.to_dict().get("ChallanNo", "")).strip()
-            if val.isdigit():
-                max_no = max(max_no, int(val))
-        return str(max_no + 1)
+            max_no = max(max_no, _yd_challan_num(doc.to_dict().get("ChallanNo", "")))
+        return f"YD-{max_no + 1}"
 
     def _yo_build_challan_html(header: dict, lots: list) -> str:
         raw_date = header.get("Date", "")
@@ -3460,7 +3466,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
                             db.collection("yarn_outward").document(f"{challan_no}_{lot['LotNo']}_{i}").set({**header, **lot})
                         challan_html = _yo_build_challan_html(header, st.session_state.yo_lots)
                     st.session_state.yo_result     = {"challan_no": challan_no, "challan_html": challan_html}
-                    st.session_state.yo_challan_no = str(int(challan_no) + 1)
+                    st.session_state.yo_challan_no = f"YD-{_yd_challan_num(challan_no) + 1}"
                     st.session_state.yo_lots       = []
                     st.session_state.pop("_yo_view_rows", None)
                     st.rerun()
@@ -3490,7 +3496,7 @@ body{{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:8mm 10mm}}
             _yo_want = ["ChallanNo","Date","PartyName","LotNo","YarnCount","Colour","Quantity","Remarks"]
             _yo_vcols = [c for c in _yo_want if c in _yo_vdf.columns]
             _yo_vdf2 = _yo_vdf[_yo_vcols].copy()
-            _yo_vdf2["_s"] = pd.to_numeric(_yo_vdf2["ChallanNo"], errors="coerce")
+            _yo_vdf2["_s"] = _yo_vdf2["ChallanNo"].apply(_yd_challan_num)
             st.dataframe(_yo_vdf2.sort_values("_s", ascending=False).drop(columns=["_s"]), use_container_width=True, hide_index=True)
         else:
             st.info("No Yarn Outward records yet.")
@@ -3522,7 +3528,7 @@ elif menu == "Yarn Inwards":
             pend    = round(sent - cleared, 3)
             if pend > 0.001:
                 pending.append({"ChallanNo": cn, "SentQty": sent, "ClearedQty": cleared, "PendingQty": pend, "Date": challan_date.get(cn,"")})
-        pending.sort(key=lambda x: (x["Date"], int(x["ChallanNo"]) if x["ChallanNo"].isdigit() else 0))
+        pending.sort(key=lambda x: (x["Date"], _yd_challan_num(x["ChallanNo"])))
         return pending
 
     def _yi_apply_fifo(pending: list, recv_qty: float):
@@ -3633,7 +3639,7 @@ elif menu == "Yarn Inwards":
                 _d = doc.to_dict()
                 _d["Date"] = _fmt_date(_d.get("Date",""))
                 _d["Cleared Against"] = ", ".join(
-                    f"C{c['ChallanNo']}({c['ClearedQty']}kg)"
+                    f"{c['ChallanNo']} ({c['ClearedQty']}kg)"
                     for c in _d.get("ClearedChallans", [])
                 )
                 _yi_raw.append(_d)
@@ -5002,7 +5008,7 @@ elif menu == "Reports":
                 st.success("✅ No pending yarn — all challans fully returned.")
             else:
                 _yr_df = pd.DataFrame(_yr_rows)
-                _yr_df["_s"] = pd.to_numeric(_yr_df["Challan No"], errors="coerce")
+                _yr_df["_s"] = _yr_df["Challan No"].apply(_yd_challan_num)
                 _yr_df = _yr_df.sort_values(["Processor","_s"], ascending=True).drop(columns=["_s"])
 
                 # Processor filter
@@ -5969,7 +5975,7 @@ elif menu == "Edit Yarn Inwards":
                 lot    = doc.to_dict()
                 lot_no = lot.get("LotNo","")
                 cleared_str = ", ".join(
-                    f"C{c['ChallanNo']}({c['ClearedQty']}kg)"
+                    f"{c['ChallanNo']} ({c['ClearedQty']}kg)"
                     for c in lot.get("ClearedChallans",[])
                 )
                 with st.expander(f"Lot: {lot_no}  |  {lot.get('Colour','')}  |  {lot.get('ReceivedQty','')} Kg  |  Proc Challan: {lot.get('ProcessorChallanNo','')}",
