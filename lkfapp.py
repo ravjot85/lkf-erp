@@ -2618,8 +2618,36 @@ elif menu == "Process Inward":
             st.session_state["_pi_view_rows"] = _raw
         rows = st.session_state["_pi_view_rows"]
         if rows:
+            df = pd.DataFrame(rows)
+
+            pivf1, pivf2 = st.columns([1, 2])
+            with pivf1:
+                _pi_procs = ["All"] + sorted(df["PartyName"].dropna().unique().tolist()) if "PartyName" in df.columns else ["All"]
+                pi_proc_filter = st.selectbox("Processor", _pi_procs, key="pi_view_proc_filter")
+            with pivf2:
+                pi_date_filter = st.selectbox("Date Range", ["All Dates", "This Month", "Custom"], key="pi_view_drange")
+                pi_from_date, pi_to_date = None, None
+                if pi_date_filter == "Custom":
+                    pidc1, pidc2 = st.columns(2)
+                    with pidc1:
+                        pi_from_date = st.date_input("From", format="DD/MM/YYYY", key="pi_view_from")
+                    with pidc2:
+                        pi_to_date   = st.date_input("To", format="DD/MM/YYYY", key="pi_view_to")
+
+            if pi_proc_filter != "All" and "PartyName" in df.columns:
+                df = df[df["PartyName"] == pi_proc_filter]
+
+            if "Date" in df.columns:
+                df["_d"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+                if pi_date_filter == "This Month":
+                    from datetime import datetime as _pidt
+                    _now = _pidt.today()
+                    df = df[(df["_d"].dt.month == _now.month) & (df["_d"].dt.year == _now.year)]
+                elif pi_date_filter == "Custom" and pi_from_date and pi_to_date:
+                    df = df[(df["_d"].dt.date >= pi_from_date) & (df["_d"].dt.date <= pi_to_date)]
+                df = df.drop(columns=["_d"])
+
             want = ["ChallanNo", "Date", "PartyName", "LotNo", "OrderId", "Colour", "Process", "SentQty", "ReceivedQty", "ShortQty", "ShortPct", "Rate", "Amount"]
-            df   = pd.DataFrame(rows)
             cols = [c for c in want if c in df.columns]
             _pi_view_df = df[cols].copy()
             _pi_view_df["_sort"] = pd.to_numeric(_pi_view_df["ChallanNo"], errors="coerce")
