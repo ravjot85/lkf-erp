@@ -2651,9 +2651,19 @@ elif menu == "Process Inward":
             cols = [c for c in want if c in df.columns]
             _pi_view_df = df[cols].copy()
             _pi_view_df["_sort"] = pd.to_numeric(_pi_view_df["ChallanNo"], errors="coerce")
-            st.dataframe(
-                _pi_view_df.sort_values("_sort", ascending=False).drop(columns=["_sort"]),
-                use_container_width=True, hide_index=True
+            _pi_view_df = _pi_view_df.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+            st.dataframe(_pi_view_df, use_container_width=True, hide_index=True)
+
+            _pi_xlsx_buf = io.BytesIO()
+            with pd.ExcelWriter(_pi_xlsx_buf, engine="openpyxl") as _pi_ew:
+                _pi_view_df.to_excel(_pi_ew, index=False, sheet_name="Process Inward")
+            _pi_xlsx_buf.seek(0)
+            st.download_button(
+                "⬇️ Export to Excel",
+                data=_pi_xlsx_buf,
+                file_name=f"ProcessInward_{date.today().strftime('%Y-%m-%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="pi_view_export_xlsx",
             )
         else:
             st.info("No Process Inward records yet")
